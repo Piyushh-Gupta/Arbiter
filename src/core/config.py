@@ -19,6 +19,13 @@ class LoggingSettings(BaseModel):
     level: str = Field(default=DEFAULT_LOG_LEVEL)
 
 
+class ActiveDatasetSettings(BaseModel):
+    """Settings representing the currently active dataset."""
+
+    id: str | None = Field(default=None)
+    version: str | None = Field(default=None)
+
+
 class Settings(BaseSettings):
     """Root application settings."""
 
@@ -26,6 +33,7 @@ class Settings(BaseSettings):
     environment: str = Field(default=DEFAULT_ENV)
 
     # Sub-configurations
+    dataset: ActiveDatasetSettings = ActiveDatasetSettings()
     db: DatabaseSettings = DatabaseSettings()
     log: LoggingSettings = LoggingSettings()
 

@@ -22,7 +22,20 @@ def validate_paths() -> None:
 
 def validate_configuration() -> None:
     """Validate cross-cutting configuration constraints."""
-    pass
+    # Ensure active dataset is registered
+    if settings.dataset.id is not None:
+        from src.core.datasets import registry
+        from src.core.exceptions import RegistryError
+
+        # We need a version to look up, or we assume a default.
+        # If version is required, config should provide it.
+        version = settings.dataset.version or "1.0.0"
+        try:
+            registry.get_dataset(settings.dataset.id, version)
+        except RegistryError as e:
+            raise ConfigurationError(
+                f"Active dataset {settings.dataset.id}@{version} is not registered."
+            ) from e
 
 
 def validate_startup() -> None:
