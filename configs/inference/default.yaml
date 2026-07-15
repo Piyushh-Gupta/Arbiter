@@ -1,4 +1,2 @@
 # Inference configuration
-batch_size: 1
-mc_dropout_passes: 10
-re_retrieve_max_loops: 1
+placeholder: true

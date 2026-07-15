@@ -4,7 +4,7 @@ install:
 	poetry install
 
 format:
-	poetry run black src/ tests/
+	poetry run ruff format src/ tests/
 	poetry run isort src/ tests/
 
 lint:

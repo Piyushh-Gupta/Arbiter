@@ -14,8 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl build-esse
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY pyproject.toml ./
-# Only install main dependencies to cache the layer
+COPY pyproject.toml poetry.lock* ./
 RUN poetry install --without dev,test --no-root
 
 COPY src/ ./src/

@@ -1,5 +1,2 @@
 # Training configuration
-learning_rate: 2e-5
-batch_size: 16
-epochs: 3
-mixed_precision: true
+placeholder: true

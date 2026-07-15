@@ -1,8 +1,2 @@
 # Experiment configuration
-defaults:
-  - override /dataset: default
-  - override /model: default
-  - override /training: default
-
-experiment_name: "baseline_xgboost"
-seed: 42
+placeholder: true
