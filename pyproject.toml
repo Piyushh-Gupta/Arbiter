@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A Trustworthy AI Decision Support System for Evidence-Based Claim Verification"
 authors = ["Piyush Gupta <piyush@example.com>"]
 readme = "README.md"
-packages = [{ include = "src" }]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -15,15 +15,15 @@ pydantic = "^2.7.4"
 pydantic-settings = "^2.3.4"
 structlog = "^24.2.0"
 hydra-core = "^1.3.2"
-torch = "*"
-torchvision = "*"
-torchaudio = "*"
-transformers = "*"
-sentence-transformers = "*"
-faiss-cpu = "*"
-rank-bm25 = "*"
-xgboost = "*"
-wandb = "*"
+torch = "^2.3.0"
+torchvision = "^0.18.0"
+torchaudio = "^2.3.0"
+transformers = "^4.41.0"
+sentence-transformers = "^4.41.0"
+faiss-cpu = "^1.8.0"
+rank-bm25 = "^0.2.2"
+xgboost = "^2.0.3"
+wandb = "^0.17.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.2"

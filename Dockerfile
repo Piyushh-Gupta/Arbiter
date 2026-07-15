@@ -19,8 +19,6 @@ RUN poetry install --without dev,test --no-root
 
 COPY src/ ./src/
 COPY configs/ ./configs/
-COPY README.md ./
-RUN poetry install --without dev,test
 
 FROM python:3.12-slim
 
