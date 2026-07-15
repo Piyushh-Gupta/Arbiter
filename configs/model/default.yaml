@@ -1,0 +1,5 @@
+# Model configuration
+asr: "openai/whisper-base.en"
+extractor: "distilbert-base-uncased"
+verifier: "microsoft/deberta-v3-base"
+triage: "xgboost"

@@ -1,0 +1,4 @@
+# Dataset configuration
+name: "fever_subset"
+retrieval_threshold: 0.75
+contradiction_threshold: 0.85

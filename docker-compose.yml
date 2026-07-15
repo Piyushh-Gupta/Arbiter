@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  arbiter-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arbiter-api:latest
+    container_name: arbiter-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs
+      - ./logs:/app/logs
+      - ./artifacts:/app/artifacts
+    env_file:
+      - .env
+    environment:
+      - ENV_MODE=development
+    restart: unless-stopped

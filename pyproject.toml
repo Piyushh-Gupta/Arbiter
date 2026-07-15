@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "arbiter"
+version = "0.1.0"
+description = "A Trustworthy AI Decision Support System for Evidence-Based Claim Verification"
+authors = ["Piyush Gupta <piyush@example.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.111.0"
+uvicorn = {extras = ["standard"], version = "^0.30.1"}
+sqlalchemy = "^2.0.30"
+pydantic = "^2.7.4"
+pydantic-settings = "^2.3.4"
+structlog = "^24.2.0"
+hydra-core = "^1.3.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.2"
+pytest-cov = "^5.0.0"
+black = "^24.4.2"
+isort = "^5.13.2"
+mypy = "^1.10.0"
+ruff = "^0.4.9"
+pre-commit = "^3.7.1"
+
+[tool.poetry.group.test.dependencies]
+httpx = "^0.27.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

@@ -1,0 +1,7 @@
+# Evaluation configuration
+metrics:
+  - "risk_coverage_auc"
+  - "ece"
+  - "f1"
+thresholds:
+  confidence: 0.6
