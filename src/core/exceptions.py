@@ -23,3 +23,9 @@ class IntegrityError(Exception):
     """Raised when an artifact fails cryptographic integrity verification."""
 
     pass
+
+
+class DatasetValidationError(Exception):
+    """Raised by the orchestration layer when a dataset fails validation."""
+
+    pass

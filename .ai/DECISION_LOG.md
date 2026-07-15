@@ -14,3 +14,4 @@
 | Architecture | ADR-005: Immutable Dataset Registry | All dataset metadata must remain immutable and be managed exclusively through the Dataset Registry to guarantee deterministic behavior and reproducible experiments. | Approved |
 | Governance | ADR-006: CI Contract | Establish `.ai/CI_CONTRACT.md` as the single source of truth for deterministic local and GitHub Actions validation. | Approved |
 | Architecture | ADR-007: Transport Metadata Separation | Dataset metadata and transport metadata are separate architectural concerns and must evolve independently. | Approved |
+| Architecture | ADR-008: Pure Validation Layer | Dataset validation is a read-only evaluation process that always returns a deterministic validation report. Exception handling and orchestration remain outside the validator. | Approved |
