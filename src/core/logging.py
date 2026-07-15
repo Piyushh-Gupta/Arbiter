@@ -1,6 +1,8 @@
 import logging
-import structlog
 import sys
+
+import structlog
+
 
 def setup_logging(log_level: str = "INFO") -> None:
     logging.basicConfig(
