@@ -3,11 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from src.core.datasets.metadata import (
-    DatasetMetadata,
-    DatasetSchema,
-    DatasetSplit,
-)
+from src.core.datasets.metadata import DatasetMetadata, DatasetSchema, DatasetSplit
 from src.core.datasets.registry import DatasetRegistry
 from src.core.exceptions import RegistryError
 
