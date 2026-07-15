@@ -6,6 +6,7 @@
 - [x] M0.3 Project Infrastructure
 - [x] M0.4 AI Governance Layer
 - [x] M0.5 CI Diagnostics & Stabilization
+- [x] M1.1 Configuration Layer
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

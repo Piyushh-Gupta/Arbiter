@@ -10,3 +10,4 @@
 | Infrastructure | CI Stabilization & Strict Typing | Enforce zero-global-state testing and mypy-strict compliance baseline. | Approved |
 | Infrastructure | ADR-002: Track `poetry.lock` | Track `poetry.lock` for deterministic builds. | Approved |
 | Governance | ADR-003: Milestone IDs | Adopt permanent milestone IDs as the project standard. | Approved |
+| Architecture | ADR-004: Bootstrap inside Lifespan | Application startup must execute the bootstrap layer through the FastAPI lifespan to guarantee deterministic initialization, validation, and fail-fast startup. | Approved |

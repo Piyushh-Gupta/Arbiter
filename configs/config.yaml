@@ -1,0 +1,11 @@
+defaults:
+  - dataset: default
+  - deployment: default
+  - evaluation: default
+  - experiment: default
+  - inference: default
+  - model: default
+  - training: default
+  - _self_
+
+# Global configuration variables can be defined here
