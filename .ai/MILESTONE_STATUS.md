@@ -1,11 +1,11 @@
 # Milestone Status
 
 ## Completed
-- [x] Repository Creation
-- [x] Repository Structure
-- [x] Project Infrastructure
-- [x] AI Governance Layer (.ai/)
-- [x] CI Stabilization
+- [x] M0.1 Repository Creation
+- [x] M0.2 Repository Structure
+- [x] M0.3 Project Infrastructure
+- [x] M0.4 AI Governance Layer
+- [x] M0.5 CI Diagnostics & Stabilization
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

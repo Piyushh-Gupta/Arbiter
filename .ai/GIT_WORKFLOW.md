@@ -15,3 +15,4 @@
 ## Rules
 - **No Unapproved Commits**: AI assistants must await user approval before committing or pushing.
 - **Atomic Commits**: Keep commits small and logically isolated.
+- **No Force Pushes**: `git push --force` and `git push --force-with-lease` are strictly prohibited unless explicitly approved after an architectural review.

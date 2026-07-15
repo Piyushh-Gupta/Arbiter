@@ -21,3 +21,8 @@ Every implementation must pass this checklist before approval and commit.
 ## 5. Security & Maintainability
 - [ ] Are secrets excluded from source code and managed via `.env`?
 - [ ] Is logging implemented via `structlog`?
+
+## 6. Root Cause Validation
+- [ ] Was the actual root cause identified?
+- [ ] Is every modification directly related to that root cause?
+- [ ] Were unrelated files left untouched?
