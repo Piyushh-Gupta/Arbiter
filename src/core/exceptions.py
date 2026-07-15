@@ -11,3 +11,15 @@ class RegistryError(Exception):
     """Raised when there is an error interacting with the Dataset Registry."""
 
     pass
+
+
+class DownloadError(Exception):
+    """Raised when an error occurs during artifact download."""
+
+    pass
+
+
+class IntegrityError(Exception):
+    """Raised when an artifact fails cryptographic integrity verification."""
+
+    pass

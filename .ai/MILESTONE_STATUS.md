@@ -8,6 +8,7 @@
 - [x] M0.5 CI Diagnostics & Stabilization
 - [x] M1.1 Configuration Layer
 - [x] M1.2 Dataset Registry
+- [x] M1.3 Dataset Downloader
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

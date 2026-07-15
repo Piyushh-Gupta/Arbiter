@@ -26,6 +26,14 @@ class ActiveDatasetSettings(BaseModel):
     version: str | None = Field(default=None)
 
 
+class DownloadSettings(BaseModel):
+    """Download retry and timeout configurations."""
+
+    max_retries: int = Field(default=3, ge=0)
+    backoff_factor: float = Field(default=2.0, ge=1.0)
+    timeout_seconds: float = Field(default=30.0, gt=0.0)
+
+
 class Settings(BaseSettings):
     """Root application settings."""
 
@@ -34,6 +42,7 @@ class Settings(BaseSettings):
 
     # Sub-configurations
     dataset: ActiveDatasetSettings = ActiveDatasetSettings()
+    download: DownloadSettings = DownloadSettings()
     db: DatabaseSettings = DatabaseSettings()
     log: LoggingSettings = LoggingSettings()
 

@@ -13,3 +13,4 @@
 | Architecture | ADR-004: Bootstrap inside Lifespan | Application startup must execute the bootstrap layer through the FastAPI lifespan to guarantee deterministic initialization, validation, and fail-fast startup. | Approved |
 | Architecture | ADR-005: Immutable Dataset Registry | All dataset metadata must remain immutable and be managed exclusively through the Dataset Registry to guarantee deterministic behavior and reproducible experiments. | Approved |
 | Governance | ADR-006: CI Contract | Establish `.ai/CI_CONTRACT.md` as the single source of truth for deterministic local and GitHub Actions validation. | Approved |
+| Architecture | ADR-007: Transport Metadata Separation | Dataset metadata and transport metadata are separate architectural concerns and must evolve independently. | Approved |

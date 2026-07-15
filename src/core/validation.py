@@ -37,6 +37,10 @@ def validate_configuration() -> None:
                 f"Active dataset {settings.dataset.id}@{version} is not registered."
             ) from e
 
+    # Validate download settings
+    if settings.download.timeout_seconds <= 0:
+        raise ConfigurationError("Download timeout must be strictly positive.")
+
 
 def validate_startup() -> None:
     """Run all validation routines required for startup."""
