@@ -1,0 +1,301 @@
+Arbiter
+System Design Document (SDD)
+1. System Overview
+Arbiter is an evidence-aware decision support system designed to evaluate factual claims and explicitly reason about verification uncertainty.
+The architecture is a deterministic, monolithic pipeline consisting of five sequential stages and exactly one conditional loop (re-retrieval). To optimize for single-developer velocity, research reproducibility, and minimal operational overhead, the system avoids distributed microservices, multi-agent frameworks, and external API dependencies (beyond initial model downloading). The system is deployed as a single, unified Python application exposing a REST API for inference, backed by offline training and dataset generation scripts.
+This architecture ensures that the central research hypotheses—evaluating the efficacy of a failure-mode-aware triage head against single-scalar baselines—can be tested deterministically without network latency, external data shifts, or distributed system race conditions interfering with the results.
+2. Implementation Freeze
+To eliminate decision fatigue and guarantee a reproducible environment for a single researcher, the following technology stack is strictly frozen.
+Models
+*
+ ASR: openai/whisper-base.en (Frozen). Provides adequate transcription accuracy for English without consuming excessive VRAM, reserving compute for the verification stage.
+*
+ Claim Extraction: distilbert-base-uncased (Fine-tuned on ClaimBuster). Minimal parameter count ensures fast inference for a relatively simple binary classification task.
+*
+ Retrieval Embedding: sentence-transformers/all-MiniLM-L6-v2. Chosen for its exceptionally high speed-to-accuracy ratio on sentence-level dense retrieval.
+*
+ Verification: microsoft/deberta-v3-base (Fine-tuned on FEVER NLI). DeBERTa-v3 utilizes disentangled attention, yielding consistently superior performance on Natural Language Inference (NLI) tasks compared to standard BERT/RoBERTa architectures.
+*
+ Triage Head: xgboost (Gradient Boosted Trees). Decision: XGBoost is selected over an MLP. The inputs to the triage head are low-dimensional tabular features (three continuous/categorical signals). XGBoost requires significantly less hyperparameter tuning than an MLP, converges instantly, and offers built-in feature importance metrics, which is highly beneficial for the required ablation studies.
+Retrieval
+*
+ Dense Retrieval: FAISS (Facebook AI Similarity Search) running locally in-memory.
+*
+ Sparse Retrieval: rank_bm25 (Python implementation).
+*
+ Justification: A standalone vector database (e.g., Milvus, Qdrant, Pinecone) is explicitly rejected. Arbiter operates on a static snapshot of the FEVER Wikipedia corpus. Introducing a networked database adds unnecessary state, docker-compose complexity, and network I/O. FAISS + BM25 serialized to disk and loaded into RAM provides maximum speed and zero network overhead.
+Backend & Infrastructure
+*
+ API Framework: FastAPI. Provides asynchronous request handling, automatic OpenAPI documentation, and strict input validation via Pydantic.
+*
+ Database: SQLite (via SQLAlchemy). To balance single-developer velocity with future-proofing, SQLAlchemy is utilized strictly as an Object-Relational Mapper (ORM) abstraction layer. The application logic interacts exclusively with SQLAlchemy sessions, meaning no SQLite-specific SQL dialects are hardcoded. While deploying PostgreSQL is explicitly out of scope for the current project phase, this abstraction guarantees that a future migration to a networked RDBMS will require only a connection string update and driver dependency injection, without refactoring the core application.
+*
+ Experiment Tracking: Weights & Biases (W&B). Chosen over MLflow because it natively handles remote Artifact versioning (datasets, checkpoints) without requiring the developer to stand up an S3 bucket or local tracking server.
+*
+ Configuration Management: Hydra (omegaconf). Standardizes complex hierarchical configurations for training and dataset generation, making ablation studies trivial via command-line overrides (e.g., python run.py triage.ablate=epistemic).
+*
+ Logging: structlog. Outputs JSON-formatted logs required for observability into the routing decision (FR-8).
+*
+ Dependency Management: Poetry. Guarantees bit-for-bit reproducible environments via strict lockfiles (poetry.lock).
+*
+ Testing: pytest with pytest-cov.
+*
+ Deployment: Docker. The entire inference pipeline runs in a single container.
+3. High-Level Architecture
+The system consists of three operational domains:
+1.
+ Inference Engine (Online): The core FastAPI application that receives requests, coordinates the five pipeline stages, executes the single re-retrieval loop if triggered, and returns the verdict and routing action. Models are loaded directly into GPU memory via PyTorch.
+2.
+ Dataset Construction & Training Pipeline (Offline): A suite of Hydra-configured Python scripts that generate the failure-mode dataset (retrieval restriction, contradiction pairing, MC-dropout filtering), fine-tune DistilBERT and DeBERTa, and train the XGBoost triage head.
+3.
+ Evaluation & Experimentation Engine (Offline): Scripts that evaluate model checkpoints against the test splits and the external VitaminC dataset, calculate Risk-Coverage AUC, execute ablation studies, and push metrics to W&B.
+4. Repository Structure
+The repository follows a modular structure strictly separating library code from executable scripts and configuration.
+arbiter/
+├── configs/                 # Hydra configuration files (.yaml)
+│   ├── dataset/             # Params for generating failure-mode data
+│   ├── model/               # Hyperparameters for fine-tuning
+│   └── inference/           # Inference-time thresholds and active models
+├── data/                    # Ignored in git, managed via W&B Artifacts
+│   ├── raw/                 # Original FEVER, ClaimBuster, VitaminC
+│   ├── processed/           # Synthetic failure-mode datasets
+│   └── index/               # FAISS and BM25 serialized indices
+├── src/                     # Core library code
+│   ├── api/                 # FastAPI routes and Pydantic schemas
+│   ├── pipeline/            # End-to-end inference orchestrator
+│   ├── models/              # PyTorch wrapper classes (Whisper, BERTs, XGBoost)
+│   ├── retrieval/           # BM25 + FAISS logic and re-retrieval query reformulator
+│   └── evaluation/          # Risk-coverage and AUC metric calculators
+├── scripts/                 # Executable entrypoints
+│   ├── construct_data.py    # Generates Tier 3 evaluation datasets
+│   ├── train_extractor.py   # DistilBERT fine-tuning
+│   ├── train_verifier.py    # DeBERTa fine-tuning
+│   ├── train_triage.py      # XGBoost training
+│   └── evaluate_system.py   # Full pipeline evaluation
+├── tests/                   # Pytest suite (unit, integration, determinism)
+├── pyproject.toml           # Poetry dependencies
+├── poetry.lock              # Frozen dependency tree
+└── Dockerfile               # Containerization definition
+Justification: Separating src/ (library) from scripts/ (execution) prevents Jupyter-notebook-style spaghetti code. The configs/ directory is isolated because Hydra requires strict directory structures.
+5. Component Design
+Note: The boundary between the 5 stages ideally uses Pydantic models (e.g., RetrievalOutput, VerificationOutput) for internal Python function returns, not just REST API boundaries, to validate data types and tensor lengths between stages.
+5.1 ASR (Speech-to-Text)
+*
+ Purpose: Transcribe audio to text.
+*
+ Inputs: Raw audio bytes (WAV/MP3).
+*
+ Outputs: String text.
+*
+ Implementation: Frozen HuggingFace pipeline("automatic-speech-recognition", model="openai/whisper-base.en").
+5.2 Claim Extractor
+*
+ Purpose: Filter conversational filler; identify verifiable assertions.
+*
+ Inputs: String text.
+*
+ Outputs: List of extracted claim strings.
+*
+ Implementation: Fine-tuned DistilBERTForSequenceClassification. Threshold-based filtering.
+5.3 Hybrid Retriever
+*
+ Purpose: Surface relevant Wikipedia evidence.
+*
+ Inputs: Claim string.
+*
+ Outputs: Top-K evidence documents and normalized retrieval scores.
+*
+ Implementation: Parallel execution of BM25 (lexical) and FAISS (dense). Scores are normalized and combined linearly.
+5.4 Verifier & Uncertainty Estimator
+*
+ Purpose: Determine entailment and quantify epistemic uncertainty.
+*
+ Inputs: Claim string, Evidence string.
+*
+ Outputs: Entailment Logits, MC Dropout variance (scalar), cross-evidence contradiction flag (boolean).
+*
+ Implementation: Fine-tuned DeBERTaForSequenceClassification.
+*
+ Critical Detail: To enable MC Dropout, the model must explicitly maintain dropout layers active during inference (e.g., using a custom forward pass that bypasses model.eval() for dropout layers, or utilizing HF's mc_dropout implementations). Stochastic forward passes are averaged.
+5.5 Triage Head
+*
+ Purpose: Route the claim based on uncertainty signals.
+*
+ Inputs: 3-dimensional vector: [Retrieval Score, Contradiction Flag, Epistemic Variance].
+*
+ Outputs: Enum: ANSWER, RE_RETRIEVE, ESCALATE.
+*
+ Implementation: Pre-trained xgboost.XGBClassifier.
+6. Data Flow
+Inference Flow (The Pipeline)
+1.
+ Client POSTs audio or text to /v1/verify.
+2.
+ If audio, pass to ASR. Else, proceed.
+3.
+ Pass text to Extractor. If no claims found, return immediate 400 or neutral response.
+4.
+ Pass claim to Retriever. Fetch top-K documents. Extract Signal 1: Retrieval Insufficiency (based on score threshold or score drop-off).
+5.
+ Conditional Loop Start: Pass claim + docs to Verifier.
+  - Identify conflicting evidence labels (SUPPORTS vs REFUTES). Extract Signal 2: Cross-Evidence Contradiction.
+  - Run MC Dropout forward passes. Extract Signal 3: Epistemic Variance.
+6.
+ Pass [Signal 1, Signal 2, Signal 3] to Triage Head.
+7.
+ If Triage Head outputs RE_RETRIEVE and loop count == 0:
+  - Reformulate query (e.g., drop stop words, extract specific entities using spaCy).
+  - Goto Step 4. Loop count = 1.
+8.
+ Return final structured JSON.
+7. API Design
+The system exposes a FastAPI REST interface.
+Endpoint: POST /v1/verify
+Request Payload (multipart/form-data or application/json):
+{
+  "text": "The Eiffel Tower was built in 1889.",
+  "audio_file": null 
+}
+Response Payload (200 OK):
+{
+  "claim": "The Eiffel Tower was built in 1889.",
+  "verdict": "SUPPORTS",
+  "routing_action": "ANSWER",
+  "diagnostic_signals": {
+    "retrieval_insufficiency": 0.12,
+    "evidence_contradiction": false,
+    "epistemic_uncertainty": 0.04
+  },
+  "evidence": [
+    {"doc_id": "Eiffel_Tower", "text": "...completed in 1889..."}
+  ]
+}
+Error Handling: standard HTTP status codes (400 for bad input, 422 for validation errors, 500 for inference failures). No authentication is required for this research-scoped deployment.
+8. Model Lifecycle
+The system utilizes a strict MLOps lifecycle to track model artifacts from training to deployment:
+1.
+ Training & Checkpoint Creation: Scripts output checkpoints tagged with unique run hashes (e.g., deberta-v3-fever-{wandb_run_id}).
+2.
+ Validation & Approval: Evaluation scripts execute Tier 2 (System) and Tier 3 (Research) metrics. If Risk-Coverage AUC surpasses the baseline, the artifact is marked for promotion.
+3.
+ Model Registry: The approved checkpoint is pushed to W&B Artifacts and assigned a semantic version (e.g., v1.2.0) and an alias (staging or production).
+4.
+ Inference Deployment: The FastAPI container startup script queries W&B for the artifact tagged production.
+5.
+ Rollback Policy: In the event of an inference regression, the developer simply reverts the alias tag in the W&B UI to the previous version and restarts the Docker container.
+6.
+ Retirement: Deprecated models are stripped of aliases but retained in cold storage for reproducible ablation comparisons.
+9. Data Management
+All data dependencies are managed to strictly prevent leakage and ensure reproducibility.
+*
+ Raw Data: FEVER (.jsonl), ClaimBuster (.csv), VitaminC (.jsonl) are downloaded once and hashed.
+*
+ Vector Index Generation: A standalone script parses the FEVER Wikipedia corpus, chunks the text, runs it through the sentence-transformer, and outputs faiss.index and bm25.pkl to disk.
+*
+ Failure-Mode Datasets: Generated via scripts/construct_data.py. The script applies the precise methodologies from SRD Sections 10.1 A-G. The output is uploaded to W&B Artifacts as failure_mode_dataset:vX.
+10. Configuration & Experiment Management
+A strict Hydra hierarchy manages all configurable parameters to ensure experiment reproducibility. The configuration structure is:
+configs/
+├── dataset/     # BM25/FAISS thresholds, contradiction semantic similarity cutoffs
+├── model/       # Hyperparameters (learning rate, dropout, dimensions)
+├── training/    # Batch sizes, mixed precision (FP16) toggles, gradient accumulation
+├── evaluation/  # Risk-coverage boundaries, VitaminC test integration
+├── deployment/  # Host specific variables, worker counts
+├── inference/   # Target artifact IDs, dynamic inference thresholds
+└── experiment/  # Overrides that compose the above (e.g., experiment_01_no_epistemic.yaml)
+To avoid breaking research reproducibility, architectural implementation details are parameterized via Hydra rather than hardcoded in Python. Configurable parameters include:
+Number of MC Dropout passes (Default: 10)
+Retrieval Top-K (Default: 5)
+Retrieval score normalization strategy (Default: min-max)
+Inference batch sizes & Mixed precision (FP16) toggle
+Triage confidence routing thresholds
+Tracking: W&B integrates cleanly with HuggingFace Trainer. Custom Risk-Coverage AUC metrics are calculated via scikit-learn in the evaluation scripts and logged as custom charts in the W&B dashboard.
+11. Testing Strategy
+*
+ Unit Tests (pytest): Test individual logic chunks (e.g., query reformulator logic, Pydantic schema validation).
+*
+ Integration Tests: Feed a mocked claim through the full Pipeline class to ensure stage-to-stage handoffs function without tensor dimension mismatch errors.
+*
+ Determinism Tests (Critical): A specific test asserts that running the Verifier twice with the same fixed seed produces the exact same MC Dropout variance up to 5 decimal places.
+*
+ CI Validation: GitHub Actions executes the Pytest suite on every push. It does not train models, but it runs inference on a tiny dummy dataset to ensure no syntax/shape regressions.
+12. Deployment Architecture
+*
+ Packaging: A standard Dockerfile based on nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04.
+*
+ Runtime: The container runs uvicorn (FastAPI server).
+*
+ Hardware Assumptions:
+  - Recommended Development Environment: A single GPU with at least 16GB VRAM (e.g., RTX 4080/3090 or AWS g4dn.xlarge) to hold Whisper, DistilBERT, and DeBERTa simultaneously in memory for maximum throughput.
+  - Minimum Supported Environment: 8GB VRAM or CPU-only constraints. Requires practical compromises: sequential model loading (loading/unloading Whisper, DistilBERT, and DeBERTa into VRAM dynamically), falling back to CPU execution for selected components, significantly reduced inference throughput, and longer offline training times.
+*
+ Environment Variables: Kept minimal. WANDB_API_KEY for fetching models, ENV_MODE (dev/prod).
+13. Performance Considerations
+*
+ VRAM Management: Whisper-base (≈300MB), DistilBERT (≈260MB), DeBERTa-v3-base (≈350MB). Total model VRAM footprint is under 1GB. FAISS index for FEVER (5.4 million docs, 384 dimensions) requires ≈8.2GB of System RAM.
+*
+ Inference Latency: The bottleneck is the MC Dropout phase (10 forward passes through DeBERTa). Batching the multiple passes into a single tensor computation (Batch_Size=N, Seq_Len) will dramatically reduce this latency compared to a Python for loop. Expected latency is 500ms - 1500ms per text claim.
+*
+ Optimization: Mixed precision (FP16) is utilized via PyTorch autocast during inference to maximize throughput without accuracy degradation.
+14. Security & Robustness Considerations
+Given the system is an evaluation-only research tool, security considerations are scoped to application stability:
+*
+ Input Validation: Pydantic strictly enforces maximum string lengths (e.g., 1000 characters) to prevent OOM errors from excessively large tensor allocations.
+*
+ Audio Limits: Audio files are truncated or rejected if exceeding 30 seconds to bound transcription compute time.
+*
+ Data Integrity: The static FAISS index and SQLite DB are read-only at inference time, preventing any injection attacks from modifying the evidence base.
+14.1 Operational Failure Handling
+Explicit boundary handling ensures that component failures yield deterministic, debuggable outputs rather than opaque cascading crashes:
+*
+ Corrupted Audio / Unreadable File: Detection: ASR pre-processing throws an exception. Logging: WARNING. Recovery: None. User Response: 400 Bad Request with 'Invalid audio format'.
+*
+ Whisper Inference Failure / CUDA OOM: Detection: PyTorch throws RuntimeError during inference. Logging: CRITICAL with full stack trace. Recovery: Fast-fail the request; container orchestrator restarts process if OOM. User Response: 500 Internal Server Error.
+*
+ Empty Claim Extraction: Detection: DistilBERT returns zero check-worthy claims. Logging: INFO. Recovery: Pipeline short-circuits safely. User Response: 200 OK with payload {'status': 'no_verifiable_claims'}.
+*
+ Zero Retrieved Documents: Detection: FAISS/BM25 returns empty sets (e.g., highly out-of-domain gibberish). Logging: INFO. Recovery: Bypass NLI Verifier (to save compute), construct synthetic feature vector [Signal 1: 1.0 (max insufficiency), Signal 2: NaN, Signal 3: NaN], and route directly to Triage Head for ESCALATE or RE_RETRIEVE.
+*
+ Missing Model Checkpoint / Corrupted FAISS Index: Detection: Startup I/O or Hash mismatch. Logging: FATAL. Recovery: Crash immediately on container startup (Fail-fast). Do not open the HTTP port.
+*
+ W&B / Network Unavailable (Offline Mode): Detection: Timeout connecting to api.wandb.ai. Logging: WARNING. Recovery: System automatically falls back to WANDB_MODE=offline, queues metrics locally, and proceeds with training/inference to prevent blocking the researcher.
+15. Development Workflow
+*
+ Branching: Trunk-based development. The single developer commits directly to main for documentation and scripts, utilizing short-lived feature branches for major refactors.
+*
+ Commit Conventions: Conventional Commits (feat:, fix:, chore:, docs:, experiment:) to auto-generate changelogs.
+*
+ Experiment Workflow: Modify config/model/experiment_v2.yaml -> Run python scripts/train_triage.py -cn experiment_v2 -> Review Risk-Coverage AUC in W&B dashboard -> Tag best artifact.
+16. Implementation Milestones
+*
+ Milestone 1: Infrastructure & Data Pipelines (Goal: Clean repository, CI passing, datasets downloaded and formatted. Deliverables: Pytest suite, DVC/W&B initialized, FAISS/BM25 indices generated.)
+*
+ Milestone 2: Component Fine-Tuning (Goal: Extractor and Verifier meet Tier 1 Component metrics. Deliverables: ClaimBuster DistilBERT weights, FEVER DeBERTa weights.)
+*
+ Milestone 3: End-to-End Pipeline Scaffold (Goal: The 5-stage pipeline runs without crashing. Deliverables: FastAPI endpoints live, end-to-end integration tests passing.)
+*
+ Milestone 4: Failure-Mode Dataset Generation (Goal: Generate the synthetic data required to train the Triage Head. Deliverables: Execution of construct_data.py adhering to SRD Sections 10.1 A-G.)
+*
+ Milestone 5: Triage Head Training & Evaluation (Goal: Train XGBoost, execute ablation studies, test against VitaminC. Deliverables: Final Risk-Coverage AUC curves (Tier 3 metrics).)
+17. Decisions Frozen
+1.
+ Architecture: Monolithic FastAPI application; no microservices.
+2.
+ Retrieval Engine: Local FAISS + rank_bm25 serialized to disk; no external Vector DB.
+3.
+ Triage Model: XGBoost algorithm for the routing policy (overrides SRD deferral).
+4.
+ Experiment Tracking: W&B for tracking and artifact versioning.
+5.
+ Configuration: Hydra (omegaconf) for all experiment files.
+6.
+ Dependency Locking: Poetry for reproducible virtual environments.
+7.
+ Inference Optimization: MC Dropout passes will be batched into a single PyTorch tensor rather than looped sequentially.
+18. Decisions Deferred
+1.
+ Query Reformulation Strategy: The exact string manipulation used when the RE_RETRIEVE loop triggers is deferred until baseline retrieval metrics are established.
+2.
+ Variance Cutoff Percentile: The exact scalar threshold used to label NEI claims as 'Epistemically Uncertain' will be determined empirically after observing the variance distribution of the fine-tuned DeBERTa model.
+3.
+ Specific Deployment Host: Target hardware (HF Spaces vs local workstation vs AWS) is deferred until the final VRAM budget is measured during integration testing.
