@@ -14,10 +14,12 @@ from src.core.datasets.preprocessing.base import (
 )
 from src.core.datasets.preprocessing.implementations import PassThroughPreprocessor
 from src.core.datasets.preprocessing.text_implementations import (
+    ControlCharacterRemovalPreprocessor,
     UnicodeNormalizationPreprocessor,
     WhitespaceNormalizationPreprocessor,
 )
 from src.core.datasets.preprocessing.text_models import (
+    ControlCharacterRemovalDefinition,
     UnicodeNormalizationDefinition,
     WhitespaceNormalizationDefinition,
 )
@@ -377,4 +379,75 @@ def test_unicode_normalization_configuration_validation() -> None:
         PreprocessingStep(
             definition=PassThroughPreprocessingDefinition(),
             strategy=UnicodeNormalizationPreprocessor(),
+        )
+
+
+def test_control_character_removal() -> None:
+    """Test removal of ASCII and Unicode control characters with explicit bypassing."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=ControlCharacterRemovalDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    preserve_line_breaks=True,
+                    preserve_tabs=True,
+                ),
+                strategy=ControlCharacterRemovalPreprocessor(),
+            ),
+        )
+    )
+
+    def _stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="Hello\x00World\nThis\tis\rtest\u200b\x1b!",  # \x00, \x1b, \u200b are controls (wait, \u200b is Cf).
+            # Wait, \u200b is Zero Width Space, category Cf (Format). The requirement says 'Cc' (Control).
+            # The prompt says "Remove Unicode control characters using Unicode character categories (e.g. unicodedata.category())."
+            # It also says: "return unicodedata.category(char) != "Cc" or char in allowed_controls". So only Cc is removed.
+            # \x00 and \x1b are Cc. \n, \r, \t are Cc but preserved.
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    res = list(DatasetPreprocessor().preprocess(_stream(), pipeline))
+    r = typing.cast(ClassificationRecord, res[0].record)
+    assert r.text == "HelloWorld\nThis\tis\rtest\u200b!"
+
+
+def test_control_character_removal_aggressive() -> None:
+    """Test removal of line breaks and tabs when not preserved."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=ControlCharacterRemovalDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    preserve_line_breaks=False,
+                    preserve_tabs=False,
+                ),
+                strategy=ControlCharacterRemovalPreprocessor(),
+            ),
+        )
+    )
+
+    def _stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="Hello\nWorld\t!",
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    res = list(DatasetPreprocessor().preprocess(_stream(), pipeline))
+    r = typing.cast(ClassificationRecord, res[0].record)
+    assert r.text == "HelloWorld!"
+
+
+def test_control_character_removal_validation() -> None:
+    with pytest.raises(
+        PreprocessingConfigurationError,
+        match="ControlCharacterRemovalPreprocessor requires a ControlCharacterRemovalDefinition.",
+    ):
+        PreprocessingStep(
+            definition=PassThroughPreprocessingDefinition(),
+            strategy=ControlCharacterRemovalPreprocessor(),
         )

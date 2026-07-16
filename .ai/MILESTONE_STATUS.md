@@ -20,6 +20,7 @@
 - [x] M3.1 Dataset Preprocessing Framework
 - [x] M3.2 Whitespace Normalization Preprocessor
 - [x] M3.3 Unicode Normalization Preprocessor
+- [x] M3.5 Control Character Removal Preprocessor
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

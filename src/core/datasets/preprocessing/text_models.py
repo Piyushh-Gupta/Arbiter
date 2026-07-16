@@ -31,3 +31,17 @@ class UnicodeNormalizationDefinition(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class ControlCharacterRemovalDefinition(BaseModel):
+    """Configuration modeling non-printable text filtration safely preserving exact formats."""
+
+    selectors: tuple[FieldSelector, ...] = Field(
+        ..., description="Abstract field selectors pointing to target content."
+    )
+    preserve_line_breaks: bool = Field(
+        default=True, description="Prevents deletion of \\n and \\r."
+    )
+    preserve_tabs: bool = Field(default=True, description="Prevents deletion of \\t.")
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)

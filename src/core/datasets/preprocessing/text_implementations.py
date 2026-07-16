@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterator
 
 from src.core.datasets.mapping_models import TaskRecord
 from src.core.datasets.preprocessing.text_models import (
+    ControlCharacterRemovalDefinition,
     UnicodeNormalizationDefinition,
     WhitespaceNormalizationDefinition,
 )
@@ -106,4 +107,50 @@ class UnicodeNormalizationPreprocessor:
         if not isinstance(definition, UnicodeNormalizationDefinition):
             raise PreprocessingConfigurationError(
                 "UnicodeNormalizationPreprocessor requires a UnicodeNormalizationDefinition."
+            )
+
+
+def _should_keep_character(char: str, allowed_controls: set[str]) -> bool:
+    """Evaluates retention policy for Unicode character categories."""
+    return unicodedata.category(char) != "Cc" or char in allowed_controls
+
+
+class ControlCharacterRemovalPreprocessor:
+    """Stateless preprocessor aggressively eliminating unicode control sequences mapped via shared field selectors."""
+
+    def process_stream(
+        self, stream: Iterator[PreprocessedRecord], definition: PreprocessingDefinition
+    ) -> Iterator[PreprocessedRecord]:
+        config = typing.cast(ControlCharacterRemovalDefinition, definition)
+
+        # Build an optimized set of characters explicitly bypassed
+        _allowed_controls = set()
+        if config.preserve_line_breaks:
+            _allowed_controls.update({"\n", "\r"})
+        if config.preserve_tabs:
+            _allowed_controls.add("\t")
+
+        def _transform(text: str) -> str:
+            # Reconstruct string dynamically driving filtering via the isolated predicate
+            return "".join(
+                c for c in text if _should_keep_character(c, _allowed_controls)
+            )
+
+        for preprocessed_record in stream:
+            new_record = _apply_text_transformation(
+                record=preprocessed_record.record,
+                selectors=config.selectors,
+                transform_fn=_transform,
+            )
+
+            yield PreprocessedRecord(
+                partition=preprocessed_record.partition,
+                record=new_record,
+                preprocessing_metadata=preprocessed_record.preprocessing_metadata,
+            )
+
+    def validate_compatibility(self, definition: PreprocessingDefinition) -> None:
+        if not isinstance(definition, ControlCharacterRemovalDefinition):
+            raise PreprocessingConfigurationError(
+                "ControlCharacterRemovalPreprocessor requires a ControlCharacterRemovalDefinition."
             )
