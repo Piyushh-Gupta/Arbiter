@@ -83,3 +83,15 @@ class PathTraversalError(Exception):
     """Raised when an artifact filename attempts to escape the isolated version directory."""
 
     pass
+
+
+class UnsupportedFormatError(Exception):
+    """Raised when the parser registry cannot resolve a requested ParserFormat."""
+
+    pass
+
+
+class ParserSyntaxError(Exception):
+    """Raised when a specific parser strategy encounters syntactically invalid data."""
+
+    pass
