@@ -14,6 +14,7 @@
 - [x] M1.6 Dataset Documentation & Manifest System
 - [x] M2.1 Dataset Loading Layer
 - [x] M2.2 Dataset Parsing Layer
+- [x] M2.3 Dataset Normalization Layer
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

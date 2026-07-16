@@ -95,3 +95,15 @@ class ParserSyntaxError(Exception):
     """Raised when a specific parser strategy encounters syntactically invalid data."""
 
     pass
+
+
+class NormalizationFailureError(Exception):
+    """Raised when a syntactically parsed record cannot be converted into a normalized canonical record."""
+
+    pass
+
+
+class MalformedNormalizedRecordError(Exception):
+    """Raised when a normalized record fails structural validation upon creation."""
+
+    pass
