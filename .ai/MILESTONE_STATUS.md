@@ -12,6 +12,7 @@
 - [x] M1.4 Dataset Validation
 - [x] M1.5 Dataset Versioning & Artifact Management
 - [x] M1.6 Dataset Documentation & Manifest System
+- [x] M2.1 Dataset Loading Layer
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

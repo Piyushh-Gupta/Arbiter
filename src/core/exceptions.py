@@ -59,3 +59,27 @@ class UnsupportedSchemaVersionError(Exception):
     """Raised when a manifest uses an unsupported schema version."""
 
     pass
+
+
+class ArtifactNotReadyError(Exception):
+    """Raised when attempting to load an artifact that is not in the READY lifecycle state."""
+
+    pass
+
+
+class ArtifactNotFoundError(Exception):
+    """Raised when a physical artifact file cannot be found on disk."""
+
+    pass
+
+
+class UnreadableArtifactError(Exception):
+    """Raised when an artifact exists but cannot be read (e.g., permission error, corrupted handle)."""
+
+    pass
+
+
+class PathTraversalError(Exception):
+    """Raised when an artifact filename attempts to escape the isolated version directory."""
+
+    pass
