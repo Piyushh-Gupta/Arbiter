@@ -6,6 +6,8 @@ from pathlib import Path
 
 import structlog
 
+from src.core.datasets.artifact_manager import ArtifactManager
+from src.core.datasets.artifact_models import ArtifactIdentity
 from src.core.datasets.validation_models import (
     ConstraintResult,
     FileConstraint,
@@ -14,7 +16,6 @@ from src.core.datasets.validation_models import (
     ValidationFailureCode,
     ValidationReport,
 )
-from src.core.paths import ProjectPaths
 
 logger = structlog.get_logger(__name__)
 
@@ -23,7 +24,7 @@ class DatasetValidator:
     """Read-only pure evaluator mapping a dataset directory state to a ValidationReport."""
 
     def __init__(self) -> None:
-        self.raw_dir = ProjectPaths.DATA_RAW
+        pass
 
     def _evaluate_file_constraint(
         self, constraint: FileConstraint, dataset_dir: Path
@@ -114,8 +115,7 @@ class DatasetValidator:
 
     def validate(
         self,
-        dataset_id: str,
-        version: str,
+        identity: ArtifactIdentity,
         constraints: tuple[ValidationConstraint, ...],
     ) -> ValidationReport:
         """
@@ -124,12 +124,13 @@ class DatasetValidator:
         This method is strictly read-only and never raises domain exceptions upon validation failure.
         It returns a deterministic ValidationReport.
         """
-        dataset_dir = self.raw_dir / dataset_id
+        artifact = ArtifactManager.resolve_artifact(identity)
+        dataset_dir = artifact.path
 
         results: list[ConstraintResult] = []
         is_valid = True
 
-        logger.info("Starting dataset validation", dataset=dataset_id, version=version)
+        logger.info("Starting dataset validation", canonical=identity.canonical)
 
         for constraint in constraints:
             if isinstance(constraint, FileConstraint):
@@ -157,14 +158,13 @@ class DatasetValidator:
 
         logger.info(
             "Completed dataset validation",
-            dataset=dataset_id,
-            version=version,
+            canonical=identity.canonical,
             is_valid=is_valid,
         )
 
         return ValidationReport(
-            dataset_id=dataset_id,
-            version=version,
+            dataset_id=identity.dataset_id,
+            version=identity.version,
             is_valid=is_valid,
             results=tuple(results),
         )

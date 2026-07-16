@@ -29,3 +29,15 @@ class DatasetValidationError(Exception):
     """Raised by the orchestration layer when a dataset fails validation."""
 
     pass
+
+
+class VersionNotFoundError(Exception):
+    """Raised when a requested dataset version cannot be resolved."""
+
+    pass
+
+
+class InvalidIdentityError(Exception):
+    """Raised when an artifact identity string is malformed or invalid."""
+
+    pass

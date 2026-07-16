@@ -15,3 +15,4 @@
 | Governance | ADR-006: CI Contract | Establish `.ai/CI_CONTRACT.md` as the single source of truth for deterministic local and GitHub Actions validation. | Approved |
 | Architecture | ADR-007: Transport Metadata Separation | Dataset metadata and transport metadata are separate architectural concerns and must evolve independently. | Approved |
 | Architecture | ADR-008: Pure Validation Layer | Dataset validation is a read-only evaluation process that always returns a deterministic validation report. Exception handling and orchestration remain outside the validator. | Approved |
+| Architecture | ADR-009: Stateless Artifact Resolution | ArtifactManager derives lifecycle from observable filesystem state. Validation sentinel files are performance caches written exclusively by the Validator and never represent mutable application state. | Approved |

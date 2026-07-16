@@ -10,6 +10,7 @@
 - [x] M1.2 Dataset Registry
 - [x] M1.3 Dataset Downloader
 - [x] M1.4 Dataset Validation
+- [x] M1.5 Dataset Versioning & Artifact Management
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

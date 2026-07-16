@@ -7,11 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.core.datasets.artifact_models import ArtifactIdentity
 from src.core.datasets.downloader import DatasetDownloader
 from src.core.datasets.metadata import DatasetMetadata, DatasetSchema, DatasetSplit
 from src.core.datasets.registry import registry
 from src.core.datasets.transport import FileEndpoint, TransportConfig
 from src.core.exceptions import IntegrityError, RegistryError
+from src.core.paths import ProjectPaths
 
 
 @pytest.fixture
@@ -53,7 +55,8 @@ def downloader(mock_dataset: TransportConfig) -> DatasetDownloader:
 
 def test_download_success(downloader: DatasetDownloader, tmp_path: Path) -> None:
     """Test successful download and integrity verification."""
-    downloader.raw_dir = tmp_path
+    ProjectPaths.DATA_RAW = tmp_path
+    identity = ArtifactIdentity(dataset_id="mock_data", version="1.0")
 
     mock_response = MagicMock()
     mock_response.__enter__.return_value = mock_response
@@ -61,9 +64,9 @@ def test_download_success(downloader: DatasetDownloader, tmp_path: Path) -> None
     mock_response.getcode.return_value = 200
 
     with patch("urllib.request.urlopen", return_value=mock_response):
-        downloader.download("mock_data", "1.0")
+        downloader.download(identity)
 
-    final_path = tmp_path / "mock_data" / "mock.txt"
+    final_path = tmp_path / "mock_data" / "1.0" / "mock.txt"
     assert final_path.exists()
     assert final_path.read_bytes() == b"mock_content"
     assert not final_path.with_name(final_path.name + ".part").exists()
@@ -71,15 +74,16 @@ def test_download_success(downloader: DatasetDownloader, tmp_path: Path) -> None
 
 def test_download_idempotency(downloader: DatasetDownloader, tmp_path: Path) -> None:
     """Test that existing valid files are not redownloaded."""
-    downloader.raw_dir = tmp_path
-    dataset_dir = tmp_path / "mock_data"
+    ProjectPaths.DATA_RAW = tmp_path
+    identity = ArtifactIdentity(dataset_id="mock_data", version="1.0")
+    dataset_dir = tmp_path / "mock_data" / "1.0"
     dataset_dir.mkdir(parents=True)
 
     final_path = dataset_dir / "mock.txt"
     final_path.write_bytes(b"mock_content")
 
     with patch("urllib.request.urlopen") as mock_urlopen:
-        downloader.download("mock_data", "1.0")
+        downloader.download(identity)
         mock_urlopen.assert_not_called()
 
 
@@ -87,7 +91,8 @@ def test_download_integrity_failure(
     downloader: DatasetDownloader, tmp_path: Path
 ) -> None:
     """Test that hash mismatches raise IntegrityError and discard the file."""
-    downloader.raw_dir = tmp_path
+    ProjectPaths.DATA_RAW = tmp_path
+    identity = ArtifactIdentity(dataset_id="mock_data", version="1.0")
 
     mock_response = MagicMock()
     mock_response.__enter__.return_value = mock_response
@@ -96,9 +101,9 @@ def test_download_integrity_failure(
 
     with patch("urllib.request.urlopen", return_value=mock_response):
         with pytest.raises(IntegrityError):
-            downloader.download("mock_data", "1.0")
+            downloader.download(identity)
 
-    part_path = tmp_path / "mock_data" / "mock.txt.part"
+    part_path = tmp_path / "mock_data" / "1.0" / "mock.txt.part"
     assert not part_path.exists()
 
 
@@ -106,7 +111,8 @@ def test_download_retry_on_network_error(
     downloader: DatasetDownloader, tmp_path: Path
 ) -> None:
     """Test that transient network errors trigger retries."""
-    downloader.raw_dir = tmp_path
+    ProjectPaths.DATA_RAW = tmp_path
+    identity = ArtifactIdentity(dataset_id="mock_data", version="1.0")
 
     # Need to patch time.sleep to avoid waiting during tests
     with patch("time.sleep"):
@@ -114,13 +120,14 @@ def test_download_retry_on_network_error(
             "urllib.request.urlopen", side_effect=urllib.error.URLError("Timeout")
         ):
             with pytest.raises(urllib.error.URLError):
-                downloader.download("mock_data", "1.0")
+                downloader.download(identity)
 
 
 def test_download_resume(downloader: DatasetDownloader, tmp_path: Path) -> None:
     """Test that existing partial downloads are resumed."""
-    downloader.raw_dir = tmp_path
-    dataset_dir = tmp_path / "mock_data"
+    ProjectPaths.DATA_RAW = tmp_path
+    identity = ArtifactIdentity(dataset_id="mock_data", version="1.0")
+    dataset_dir = tmp_path / "mock_data" / "1.0"
     dataset_dir.mkdir(parents=True)
 
     part_path = dataset_dir / "mock.txt.part"
@@ -139,7 +146,7 @@ def test_download_resume(downloader: DatasetDownloader, tmp_path: Path) -> None:
         with patch(
             "urllib.request.urlopen", return_value=mock_response
         ) as mock_urlopen:
-            downloader.download("mock_data", "1.0")
+            downloader.download(identity)
 
             # Verify the Range header was sent
             req = mock_urlopen.call_args[0][0]

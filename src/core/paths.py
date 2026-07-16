@@ -23,6 +23,16 @@ class ProjectPaths:
     LOGS_DIR: Path = ROOT / "logs"
 
     @classmethod
+    def resolve_path(cls, path_str: str) -> Path:
+        """Resolve a configuration path string relative to the project root."""
+        return cls.ROOT / path_str
+
+    @classmethod
+    def get_dataset_version_dir(cls, dataset_id: str, version: str) -> Path:
+        """Deterministically resolve the isolated storage directory for a specific dataset version."""
+        return cls.DATA_RAW / dataset_id / version
+
+    @classmethod
     def get_all_required_dirs(cls) -> list[Path]:
         """Return a list of all required directories."""
         return [

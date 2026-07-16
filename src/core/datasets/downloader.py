@@ -9,10 +9,10 @@ from pathlib import Path
 import structlog
 
 from src.core.config import settings
-from src.core.datasets.registry import registry
+from src.core.datasets.artifact_manager import ArtifactManager
+from src.core.datasets.artifact_models import ArtifactIdentity
 from src.core.datasets.transport import FileEndpoint, TransportConfig
-from src.core.exceptions import DownloadError, IntegrityError, RegistryError
-from src.core.paths import ProjectPaths
+from src.core.exceptions import DownloadError, IntegrityError
 from src.core.utils.retry import with_retry
 
 logger = structlog.get_logger(__name__)
@@ -22,7 +22,6 @@ class DatasetDownloader:
     """Orchestrates dataset downloading with idempotency and integrity verification."""
 
     def __init__(self) -> None:
-        self.raw_dir = ProjectPaths.DATA_RAW
         # A simple in-memory mapping for transport configs (to be expanded later)
         self._transports: dict[str, TransportConfig] = {}
 
@@ -129,25 +128,16 @@ class DatasetDownloader:
                 raise OSError("Range not satisfiable") from e
             raise
 
-    def download(self, dataset_id: str, version: str | None = None) -> None:
+    def download(self, identity: ArtifactIdentity) -> None:
         """
-        Download a dataset into the raw data directory.
+        Download a dataset into the raw data directory using its canonical identity.
 
         This is an explicit operation that fetches artifacts atomically.
         """
-        if version is None:
-            version = "1.0.0"  # Fallback to default if not provided
+        artifact = ArtifactManager.resolve_artifact(identity)
+        dataset_dir = artifact.path
 
-        # Ensure dataset is actually registered in the Dataset Registry (Validation)
-        try:
-            registry.get_dataset(dataset_id, version)
-        except RegistryError as e:
-            raise DownloadError(
-                f"Cannot download unregistered dataset {dataset_id}@{version}"
-            ) from e
-
-        transport = self._resolve_transport(dataset_id, version)
-        dataset_dir = self.raw_dir / dataset_id
+        transport = self._resolve_transport(identity.dataset_id, identity.version)
         dataset_dir.mkdir(parents=True, exist_ok=True)
 
         self._cleanup_stale_parts(dataset_dir)
