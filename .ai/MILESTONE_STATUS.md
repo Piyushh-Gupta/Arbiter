@@ -17,6 +17,7 @@
 - [x] M2.3 Dataset Normalization Layer
 - [x] M2.4 Schema Mapping Layer
 - [x] M2.5 Dataset Filtering & Selection Layer
+- [x] M3.1 Dataset Preprocessing Framework
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

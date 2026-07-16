@@ -161,3 +161,15 @@ class PartitionExecutionError(Exception):
     """Raised when the partitioning layer encounters an unexpected failure."""
 
     pass
+
+
+class PreprocessingConfigurationError(Exception):
+    """Raised when a preprocessing definition and strategy are incompatible."""
+
+    pass
+
+
+class PreprocessingExecutionError(Exception):
+    """Raised when the preprocessing pipeline encounters an unexpected failure."""
+
+    pass
