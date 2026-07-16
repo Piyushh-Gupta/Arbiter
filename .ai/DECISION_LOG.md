@@ -16,3 +16,4 @@
 | Architecture | ADR-007: Transport Metadata Separation | Dataset metadata and transport metadata are separate architectural concerns and must evolve independently. | Approved |
 | Architecture | ADR-008: Pure Validation Layer | Dataset validation is a read-only evaluation process that always returns a deterministic validation report. Exception handling and orchestration remain outside the validator. | Approved |
 | Architecture | ADR-009: Stateless Artifact Resolution | ArtifactManager derives lifecycle from observable filesystem state. Validation sentinel files are performance caches written exclusively by the Validator and never represent mutable application state. | Approved |
+| Architecture | ADR-010: Documentation Ownership | Dataset manifests are the exclusive source of documentation metadata. The Dataset Registry owns operational metadata only. Manifest loading remains stateless and deterministic through ProjectPaths. | Approved |

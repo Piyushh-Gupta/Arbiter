@@ -11,6 +11,7 @@
 - [x] M1.3 Dataset Downloader
 - [x] M1.4 Dataset Validation
 - [x] M1.5 Dataset Versioning & Artifact Management
+- [x] M1.6 Dataset Documentation & Manifest System
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.
