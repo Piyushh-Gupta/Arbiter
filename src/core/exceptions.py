@@ -107,3 +107,21 @@ class MalformedNormalizedRecordError(Exception):
     """Raised when a normalized record fails structural validation upon creation."""
 
     pass
+
+
+class UnsupportedTaskSchemaError(Exception):
+    """Raised when the mapping registry cannot resolve a requested task schema type."""
+
+    pass
+
+
+class SchemaMappingError(Exception):
+    """Raised when a schema mapping transformation fails unexpectedly."""
+
+    pass
+
+
+class MissingRequiredFieldError(Exception):
+    """Raised when a task record is missing a structurally required field based on the schema mapping."""
+
+    pass
