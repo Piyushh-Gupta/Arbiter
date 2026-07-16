@@ -24,6 +24,7 @@
 - [x] M3.6 Composite Preprocessing Profiles
 - [x] M4.1 Dataset Validation Framework
 - [x] M4.2 Required Field Validation
+- [x] M4.3 Empty Text Validation
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

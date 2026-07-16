@@ -86,6 +86,16 @@ class RequiredFieldValidationDefinition(ValidationDefinition):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class EmptyTextValidationDefinition(ValidationDefinition):
+    """Configuration describing required non-empty text fields."""
+
+    selectors: tuple[FieldSelector, ...] = Field(
+        ..., description="Fields that must resolve to non-empty strings."
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 if typing.TYPE_CHECKING:
     from src.core.datasets.validation.base import BaseValidator
 else:

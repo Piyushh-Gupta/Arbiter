@@ -15,8 +15,12 @@ from src.core.datasets.preprocessing_models import (
 )
 from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.datasets.validation.base import BaseValidator
-from src.core.datasets.validation.implementations import RequiredFieldValidator
+from src.core.datasets.validation.implementations import (
+    EmptyTextValidator,
+    RequiredFieldValidator,
+)
 from src.core.datasets.validation_models import (
+    EmptyTextValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
     ValidationPipeline,
@@ -328,4 +332,80 @@ def test_required_field_compatibility() -> None:
         ValidationStep(
             definition=MockValidationDefinition(field_name="text"),
             strategy=RequiredFieldValidator(),
+        )
+
+
+def test_empty_text_successful_validation() -> None:
+    """Ensure non-empty strings pass identically."""
+    records = [
+        _create_dummy_record("hello"),
+        _create_dummy_record(" hello "),
+        _create_dummy_record("\nhello"),
+    ]
+
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=EmptyTextValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),)
+                ),
+                strategy=EmptyTextValidator(),
+            ),
+        )
+    )
+
+    validator = DatasetValidator()
+    stream = validator.validate(iter(records), pipeline)
+    results = list(stream)
+
+    assert len(results) == 3
+    for i in range(3):
+        assert id(results[i]) == id(records[i])
+
+
+def test_empty_text_detects_empty() -> None:
+    """Ensure functionally empty strings dynamically throw DatasetValidationError."""
+    invalid_texts = ["", " ", "\t", "\n", "\r\n", "   \t  "]
+
+    for text in invalid_texts:
+        record = _create_dummy_record(text)
+        pipeline = ValidationPipeline(
+            steps=(
+                ValidationStep(
+                    definition=EmptyTextValidationDefinition(
+                        selectors=(SimpleFieldSelector(field_name="text"),)
+                    ),
+                    strategy=EmptyTextValidator(),
+                ),
+            )
+        )
+        validator = DatasetValidator()
+        stream = validator.validate(iter([record]), pipeline)
+
+        with pytest.raises(DatasetValidationError, match="evaluated to empty text"):
+            list(stream)
+
+
+def test_empty_text_propagates_field_resolution_error() -> None:
+    """Ensure structural schema mismatches cleanly propagate FieldResolutionError untouched."""
+    record = _create_dummy_record("hello")
+
+    definition = EmptyTextValidationDefinition(
+        selectors=(SimpleFieldSelector(field_name="missing_field"),)
+    )
+    strategy = EmptyTextValidator()
+    stream = strategy.validate_stream(iter([record]), definition)
+
+    with pytest.raises(FieldResolutionError, match="not found on record"):
+        list(stream)
+
+
+def test_empty_text_compatibility() -> None:
+    """Ensure EmptyTextValidator exactly requires its exact definition."""
+    with pytest.raises(
+        ValidationConfigurationError, match="requires an EmptyTextValidationDefinition"
+    ):
+        ValidationStep(
+            definition=MockValidationDefinition(field_name="text"),
+            strategy=EmptyTextValidator(),
         )
