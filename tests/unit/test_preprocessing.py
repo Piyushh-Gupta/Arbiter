@@ -14,9 +14,11 @@ from src.core.datasets.preprocessing.base import (
 )
 from src.core.datasets.preprocessing.implementations import PassThroughPreprocessor
 from src.core.datasets.preprocessing.text_implementations import (
+    UnicodeNormalizationPreprocessor,
     WhitespaceNormalizationPreprocessor,
 )
 from src.core.datasets.preprocessing.text_models import (
+    UnicodeNormalizationDefinition,
     WhitespaceNormalizationDefinition,
 )
 from src.core.datasets.preprocessing_models import (
@@ -250,3 +252,129 @@ def test_whitespace_normalization_unicode_and_empty() -> None:
     assert r1.text == ""
     assert r2.text == "こんにちは世界"
     assert r3.text == "already normal"
+
+
+def test_unicode_normalization_nfc_nfd() -> None:
+    """Validate NFC and NFD composition/decomposition mappings correctly."""
+
+    # NFD: Decomposed
+    nfd_pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=UnicodeNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    normalization_form="NFD",
+                ),
+                strategy=UnicodeNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    # NFC: Composed
+    nfc_pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=UnicodeNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    normalization_form="NFC",
+                ),
+                strategy=UnicodeNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    def _composed_stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="é",  # composed
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    def _decomposed_stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="e\u0301",  # decomposed
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    # Test NFD decomposing a composed character
+    res_nfd = list(DatasetPreprocessor().preprocess(_composed_stream(), nfd_pipeline))
+    r_nfd = typing.cast(ClassificationRecord, res_nfd[0].record)
+    assert r_nfd.text == "e\u0301"
+
+    # Test NFC composing a decomposed character
+    res_nfc = list(DatasetPreprocessor().preprocess(_decomposed_stream(), nfc_pipeline))
+    r_nfc = typing.cast(ClassificationRecord, res_nfc[0].record)
+    assert r_nfc.text == "é"
+
+
+def test_unicode_normalization_nfkc_nfkd() -> None:
+    """Validate NFKC and NFKD compatibility mappings."""
+    nfkc_pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=UnicodeNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    normalization_form="NFKC",
+                ),
+                strategy=UnicodeNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    def _compatibility_stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="ﬁ",  # ligature fi
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    res_nfkc = list(
+        DatasetPreprocessor().preprocess(_compatibility_stream(), nfkc_pipeline)
+    )
+    r_nfkc = typing.cast(ClassificationRecord, res_nfkc[0].record)
+    assert r_nfkc.text == "fi"
+
+
+def test_unicode_normalization_preserves_non_selected() -> None:
+    """Verify non-selected fields and provenance are preserved, empty works."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=UnicodeNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    normalization_form="NFC",
+                ),
+                strategy=UnicodeNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    def _stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="",  # empty
+            label="é",  # composed, but NOT selected
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    res = list(DatasetPreprocessor().preprocess(_stream(), pipeline))
+    r = typing.cast(ClassificationRecord, res[0].record)
+
+    assert r.text == ""
+    assert r.label == "é"
+    assert r.provenance.record_index == 1
+
+
+def test_unicode_normalization_configuration_validation() -> None:
+    with pytest.raises(
+        PreprocessingConfigurationError,
+        match="UnicodeNormalizationPreprocessor requires a UnicodeNormalizationDefinition.",
+    ):
+        PreprocessingStep(
+            definition=PassThroughPreprocessingDefinition(),
+            strategy=UnicodeNormalizationPreprocessor(),
+        )

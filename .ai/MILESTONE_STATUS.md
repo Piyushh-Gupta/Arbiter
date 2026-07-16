@@ -19,6 +19,7 @@
 - [x] M2.5 Dataset Filtering & Selection Layer
 - [x] M3.1 Dataset Preprocessing Framework
 - [x] M3.2 Whitespace Normalization Preprocessor
+- [x] M3.3 Unicode Normalization Preprocessor
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.
