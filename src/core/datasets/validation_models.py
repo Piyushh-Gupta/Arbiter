@@ -1,8 +1,11 @@
 """Immutable validation models for constraints and reporting."""
 
+from __future__ import annotations
+
+import typing
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ValidationFailureCode(str, Enum):
@@ -63,3 +66,37 @@ class ValidationReport(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
+
+
+class ValidationDefinition(BaseModel):
+    """Immutable base model for declarative validation parameters."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+if typing.TYPE_CHECKING:
+    from src.core.datasets.validation.base import BaseValidator
+else:
+    BaseValidator = typing.Any
+
+
+class ValidationStep(BaseModel):
+    """Immutable bound executable defining one exact verification constraint."""
+
+    definition: ValidationDefinition
+    strategy: BaseValidator
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "ValidationStep":
+        self.strategy.validate_compatibility(self.definition)
+        return self
+
+
+class ValidationPipeline(BaseModel):
+    """Ordered pipeline of configured validation steps."""
+
+    steps: tuple[ValidationStep, ...]
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)

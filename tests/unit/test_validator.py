@@ -13,7 +13,7 @@ from src.core.datasets.validation_models import (
     ManifestConstraint,
     ValidationFailureCode,
 )
-from src.core.datasets.validator import DatasetValidator
+from src.core.datasets.validator import ArtifactValidator
 from src.core.exceptions import RegistryError
 from src.core.paths import ProjectPaths
 
@@ -55,7 +55,7 @@ def test_validator_success(mock_identity: ArtifactIdentity, tmp_path: Path) -> N
     manifest_path = dataset_dir / "manifest.json"
     manifest_path.write_text('{"key": "value"}')
 
-    validator = DatasetValidator()
+    validator = ArtifactValidator()
 
     constraints = (
         FileConstraint(id="c1", target_path="data.txt", min_size_bytes=5),
@@ -78,7 +78,7 @@ def test_validator_missing_file(
     )
     dataset_dir.mkdir(parents=True)
 
-    validator = DatasetValidator()
+    validator = ArtifactValidator()
 
     constraints = (FileConstraint(id="c1", target_path="missing.txt"),)
 
@@ -101,7 +101,7 @@ def test_validator_insufficient_size(
     file_path = dataset_dir / "data.txt"
     file_path.write_text("tiny")
 
-    validator = DatasetValidator()
+    validator = ArtifactValidator()
 
     constraints = (FileConstraint(id="c1", target_path="data.txt", min_size_bytes=100),)
 
@@ -123,7 +123,7 @@ def test_validator_unreadable_file(
     file_path = dataset_dir / "data.txt"
     file_path.write_text("content")
 
-    validator = DatasetValidator()
+    validator = ArtifactValidator()
 
     constraints = (FileConstraint(id="c1", target_path="data.txt"),)
 
@@ -147,7 +147,7 @@ def test_validator_corrupt_manifest(
     manifest_path = dataset_dir / "manifest.json"
     manifest_path.write_text("{invalid_json")
 
-    validator = DatasetValidator()
+    validator = ArtifactValidator()
 
     constraints = (
         ManifestConstraint(id="c1", target_path="manifest.json", is_jsonl=False),
@@ -171,7 +171,7 @@ def test_validator_jsonl_manifest(
     manifest_path = dataset_dir / "manifest.jsonl"
     manifest_path.write_text('{"id": 1}\n{"id": 2}\n')
 
-    validator = DatasetValidator()
+    validator = ArtifactValidator()
 
     constraints = (
         ManifestConstraint(id="c1", target_path="manifest.jsonl", is_jsonl=True),

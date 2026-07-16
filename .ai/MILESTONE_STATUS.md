@@ -22,6 +22,7 @@
 - [x] M3.3 Unicode Normalization Preprocessor
 - [x] M3.5 Control Character Removal Preprocessor
 - [x] M3.6 Composite Preprocessing Profiles
+- [x] M4.1 Dataset Validation Framework
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

@@ -2,25 +2,29 @@
 
 import json
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import structlog
 
 from src.core.datasets.artifact_manager import ArtifactManager
 from src.core.datasets.artifact_models import ArtifactIdentity
+from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.validation_models import (
     ConstraintResult,
     FileConstraint,
     ManifestConstraint,
     ValidationConstraint,
     ValidationFailureCode,
+    ValidationPipeline,
     ValidationReport,
 )
+from src.core.exceptions import DatasetValidationError, ValidationExecutionError
 
 logger = structlog.get_logger(__name__)
 
 
-class DatasetValidator:
+class ArtifactValidator:
     """Read-only pure evaluator mapping a dataset directory state to a ValidationReport."""
 
     def __init__(self) -> None:
@@ -168,3 +172,33 @@ class DatasetValidator:
             is_valid=is_valid,
             results=tuple(results),
         )
+
+
+class DatasetValidator:
+    """Orchestrates deterministic dataset verification over immutable validation pipelines."""
+
+    def validate(
+        self, stream: Iterator[PreprocessedRecord], pipeline: ValidationPipeline
+    ) -> Iterator[PreprocessedRecord]:
+        """
+        Executes the configured validation pipeline sequentially.
+
+        Execution is purely declarative. The identical record object is yielded.
+        Exceptions short-circuit the execution immediately.
+        """
+        try:
+            for step in pipeline.steps:
+                stream = step.strategy.validate_stream(
+                    stream=stream, definition=step.definition
+                )
+
+            for record in stream:
+                yield record
+
+        except DatasetValidationError:
+            # Expected domain errors propagate purely natively.
+            raise
+        except Exception as e:
+            raise ValidationExecutionError(
+                f"Unexpected failure during dataset validation execution: {e}"
+            ) from e

@@ -185,3 +185,15 @@ class PreprocessingProfileNotFoundError(Exception):
     """Raised when a requested PreprocessingProfile cannot be resolved."""
 
     pass
+
+
+class ValidationConfigurationError(Exception):
+    """Raised when a validation definition and strategy are incompatible."""
+
+    pass
+
+
+class ValidationExecutionError(Exception):
+    """Raised when the validation pipeline encounters an unexpected failure."""
+
+    pass
