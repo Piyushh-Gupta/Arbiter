@@ -125,3 +125,21 @@ class MissingRequiredFieldError(Exception):
     """Raised when a task record is missing a structurally required field based on the schema mapping."""
 
     pass
+
+
+class FieldResolutionError(Exception):
+    """Raised when a FieldSelector cannot extract an attribute from a TaskRecord."""
+
+    pass
+
+
+class FilterConfigurationError(Exception):
+    """Raised when a filter step is invalidly configured."""
+
+    pass
+
+
+class FilterExecutionError(Exception):
+    """Raised when the filter pipeline execution encounters an unexpected failure."""
+
+    pass
