@@ -173,3 +173,15 @@ class PreprocessingExecutionError(Exception):
     """Raised when the preprocessing pipeline encounters an unexpected failure."""
 
     pass
+
+
+class DuplicatePreprocessingProfileError(Exception):
+    """Raised when a PreprocessingProfileRegistry encounters a duplicate profile_id."""
+
+    pass
+
+
+class PreprocessingProfileNotFoundError(Exception):
+    """Raised when a requested PreprocessingProfile cannot be resolved."""
+
+    pass

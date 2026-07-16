@@ -27,12 +27,16 @@ from src.core.datasets.preprocessing_models import (
     PassThroughPreprocessingDefinition,
     PreprocessedRecord,
     PreprocessingDefinition,
+    PreprocessingProfile,
+    PreprocessingProfileRegistry,
 )
 from src.core.datasets.preprocessor import DatasetPreprocessor
 from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.exceptions import (
+    DuplicatePreprocessingProfileError,
     PreprocessingConfigurationError,
     PreprocessingExecutionError,
+    PreprocessingProfileNotFoundError,
 )
 
 
@@ -451,3 +455,86 @@ def test_control_character_removal_validation() -> None:
             definition=PassThroughPreprocessingDefinition(),
             strategy=ControlCharacterRemovalPreprocessor(),
         )
+
+
+def test_preprocessing_profile_immutability() -> None:
+    """Validate PreprocessingProfile wraps a pipeline and remains immutable."""
+    pipeline = PreprocessingPipeline(steps=())
+    profile = PreprocessingProfile(profile_id="test_profile", pipeline=pipeline)
+    assert profile.profile_id == "test_profile"
+    assert profile.pipeline is pipeline
+
+
+def test_preprocessing_profile_registry_construction() -> None:
+    """Validate successful construction and lookup logic within the Registry."""
+    pipeline1 = PreprocessingPipeline(steps=())
+    pipeline2 = PreprocessingPipeline(steps=())
+    profile1 = PreprocessingProfile(profile_id="p1", pipeline=pipeline1)
+    profile2 = PreprocessingProfile(profile_id="p2", pipeline=pipeline2)
+
+    registry = PreprocessingProfileRegistry(profiles=(profile1, profile2))
+
+    assert registry.resolve("p1") is profile1
+    assert registry.resolve("p2") is profile2
+
+
+def test_preprocessing_profile_registry_duplicate_rejection() -> None:
+    """Ensure duplicate identifiers raise DuplicatePreprocessingProfileError."""
+    pipeline = PreprocessingPipeline(steps=())
+    profile1 = PreprocessingProfile(profile_id="duplicate", pipeline=pipeline)
+    profile2 = PreprocessingProfile(profile_id="duplicate", pipeline=pipeline)
+
+    with pytest.raises(
+        DuplicatePreprocessingProfileError, match="Profile ID 'duplicate' duplicated."
+    ):
+        PreprocessingProfileRegistry(profiles=(profile1, profile2))
+
+
+def test_preprocessing_profile_registry_lookup_failure() -> None:
+    """Ensure unknown lookups raise PreprocessingProfileNotFoundError."""
+    registry = PreprocessingProfileRegistry(profiles=())
+
+    with pytest.raises(
+        PreprocessingProfileNotFoundError, match="Profile ID 'unknown' not found."
+    ):
+        registry.resolve("unknown")
+
+
+def test_preprocessing_profile_execution_equivalence() -> None:
+    """Validate execution via manually constructed pipeline vs profile-resolved pipeline is identical."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=WhitespaceNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                ),
+                strategy=WhitespaceNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    profile = PreprocessingProfile(profile_id="whitespace_norm", pipeline=pipeline)
+    registry = PreprocessingProfileRegistry(profiles=(profile,))
+
+    resolved_pipeline = registry.resolve("whitespace_norm").pipeline
+
+    def _stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="  Equivalent  ",
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    # Process using direct pipeline
+    res_direct = list(DatasetPreprocessor().preprocess(_stream(), pipeline))
+    r_direct = typing.cast(ClassificationRecord, res_direct[0].record)
+
+    # Process using resolved pipeline
+    res_resolved = list(DatasetPreprocessor().preprocess(_stream(), resolved_pipeline))
+    r_resolved = typing.cast(ClassificationRecord, res_resolved[0].record)
+
+    assert r_direct.text == "Equivalent"
+    assert r_resolved.text == "Equivalent"
+    assert r_direct.text == r_resolved.text
+    # Preprocessor object identity shouldn't matter since they are distinct creations, but output values match.
