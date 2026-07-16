@@ -143,3 +143,21 @@ class FilterExecutionError(Exception):
     """Raised when the filter pipeline execution encounters an unexpected failure."""
 
     pass
+
+
+class PartitionConfigurationError(Exception):
+    """Raised when a partition mapping is invalidly configured."""
+
+    pass
+
+
+class PartitionAssignmentError(Exception):
+    """Raised when a task record cannot be assigned to any partition."""
+
+    pass
+
+
+class PartitionExecutionError(Exception):
+    """Raised when the partitioning layer encounters an unexpected failure."""
+
+    pass
