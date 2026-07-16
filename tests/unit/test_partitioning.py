@@ -5,7 +5,6 @@ from collections.abc import Iterator
 
 import pytest
 
-from src.core.datasets.filtering_models import SimpleFieldSelector
 from src.core.datasets.mapping_models import ClassificationRecord, TaskRecord
 from src.core.datasets.normalization_models import ProvenanceMetadata
 from src.core.datasets.partitioner import DatasetPartitioner
@@ -20,6 +19,7 @@ from src.core.datasets.partitioning_models import (
     PartitionedRecord,
     PartitionId,
 )
+from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.exceptions import (
     PartitionAssignmentError,
     PartitionConfigurationError,

@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
 
-from src.core.datasets.filtering_models import FieldSelector
 from src.core.datasets.mapping_models import TaskRecord
+from src.core.datasets.selectors import FieldSelector
 
 
 @dataclass(frozen=True)

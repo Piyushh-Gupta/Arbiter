@@ -13,12 +13,19 @@ from src.core.datasets.preprocessing.base import (
     PreprocessingStep,
 )
 from src.core.datasets.preprocessing.implementations import PassThroughPreprocessor
+from src.core.datasets.preprocessing.text_implementations import (
+    WhitespaceNormalizationPreprocessor,
+)
+from src.core.datasets.preprocessing.text_models import (
+    WhitespaceNormalizationDefinition,
+)
 from src.core.datasets.preprocessing_models import (
     PassThroughPreprocessingDefinition,
     PreprocessedRecord,
     PreprocessingDefinition,
 )
 from src.core.datasets.preprocessor import DatasetPreprocessor
+from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.exceptions import (
     PreprocessingConfigurationError,
     PreprocessingExecutionError,
@@ -131,3 +138,115 @@ def test_unexpected_exception_wrapping() -> None:
     preprocessor = DatasetPreprocessor()
     with pytest.raises(PreprocessingExecutionError, match="Pipeline execution failed"):
         list(preprocessor.preprocess(_mock_partitioned_stream(1), pipeline))
+
+
+def test_whitespace_normalization_collapsing_and_trimming() -> None:
+    """Validate whitespace collapsing and edge trimming."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=WhitespaceNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    collapse_multiple=True,
+                    trim_leading=True,
+                    trim_trailing=True,
+                ),
+                strategy=WhitespaceNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    preprocessor = DatasetPreprocessor()
+
+    # Custom stream with weird whitespace
+    def _weird_whitespace_stream() -> Iterator[PartitionedRecord]:
+        record = ClassificationRecord(
+            text="   Hello \t\n  World   ",
+            label="SUPPORTS",
+            provenance=ProvenanceMetadata(record_index=1),
+        )
+        yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    results = list(preprocessor.preprocess(_weird_whitespace_stream(), pipeline))
+    assert len(results) == 1
+    processed = results[0].record
+    assert isinstance(processed, ClassificationRecord)
+    assert processed.text == "Hello World"
+    # Ensure label was untouched
+    assert processed.label == "SUPPORTS"
+
+
+def test_whitespace_normalization_immutable_replacement() -> None:
+    """Assert that transformations yield a distinctly new TaskRecord memory instance."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=WhitespaceNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),)
+                ),
+                strategy=WhitespaceNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    preprocessor = DatasetPreprocessor()
+    stream = _mock_partitioned_stream(1)
+    original_records = list(stream)
+
+    results = list(preprocessor.preprocess(iter(original_records), pipeline))
+    assert len(results) == 1
+
+    original_record = original_records[0].record
+    processed_record = results[0].record
+
+    # TaskRecord identity is no longer preserved
+    assert id(original_record) != id(processed_record)
+
+    # But PartitionId and Provenance remain exactly the same
+    assert original_records[0].partition == results[0].partition
+    assert original_record.provenance == processed_record.provenance
+
+
+def test_whitespace_normalization_configuration_validation() -> None:
+    with pytest.raises(
+        PreprocessingConfigurationError,
+        match="WhitespaceNormalizationPreprocessor requires a WhitespaceNormalizationDefinition.",
+    ):
+        PreprocessingStep(
+            definition=PassThroughPreprocessingDefinition(),
+            strategy=WhitespaceNormalizationPreprocessor(),
+        )
+
+
+def test_whitespace_normalization_unicode_and_empty() -> None:
+    """Assert non-whitespace unicode configurations seamlessly pass unharmed, empty strings handle well."""
+    pipeline = PreprocessingPipeline(
+        steps=(
+            PreprocessingStep(
+                definition=WhitespaceNormalizationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),)
+                ),
+                strategy=WhitespaceNormalizationPreprocessor(),
+            ),
+        )
+    )
+
+    def _edge_case_stream() -> Iterator[PartitionedRecord]:
+        for text in ["", "     ", "こんにちは世界", " already normal "]:
+            record = ClassificationRecord(
+                text=text,
+                label="SUPPORTS",
+                provenance=ProvenanceMetadata(record_index=1),
+            )
+            yield PartitionedRecord(partition=PartitionId(name="train"), record=record)
+
+    results = list(DatasetPreprocessor().preprocess(_edge_case_stream(), pipeline))
+    r0 = typing.cast(ClassificationRecord, results[0].record)
+    r1 = typing.cast(ClassificationRecord, results[1].record)
+    r2 = typing.cast(ClassificationRecord, results[2].record)
+    r3 = typing.cast(ClassificationRecord, results[3].record)
+
+    assert r0.text == ""
+    assert r1.text == ""
+    assert r2.text == "こんにちは世界"
+    assert r3.text == "already normal"

@@ -20,10 +20,10 @@ from src.core.datasets.filtering_models import (
     FieldLengthPredicate,
     FilterPipeline,
     FilterStep,
-    SimpleFieldSelector,
 )
 from src.core.datasets.mapping_models import ClassificationRecord, TaskRecord
 from src.core.datasets.normalization_models import ProvenanceMetadata
+from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.exceptions import FieldResolutionError, FilterExecutionError
 
 
