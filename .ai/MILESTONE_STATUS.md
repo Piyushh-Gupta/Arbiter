@@ -23,6 +23,7 @@
 - [x] M3.5 Control Character Removal Preprocessor
 - [x] M3.6 Composite Preprocessing Profiles
 - [x] M4.1 Dataset Validation Framework
+- [x] M4.2 Required Field Validation
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

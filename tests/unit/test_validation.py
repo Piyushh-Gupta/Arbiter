@@ -13,8 +13,11 @@ from src.core.datasets.preprocessing_models import (
     PreprocessedRecord,
     PreprocessingMetadata,
 )
+from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.datasets.validation.base import BaseValidator
+from src.core.datasets.validation.implementations import RequiredFieldValidator
 from src.core.datasets.validation_models import (
+    RequiredFieldValidationDefinition,
     ValidationDefinition,
     ValidationPipeline,
     ValidationStep,
@@ -22,6 +25,7 @@ from src.core.datasets.validation_models import (
 from src.core.datasets.validator import DatasetValidator
 from src.core.exceptions import (
     DatasetValidationError,
+    FieldResolutionError,
     ValidationConfigurationError,
     ValidationExecutionError,
 )
@@ -197,3 +201,131 @@ def test_unexpected_error_wrapped() -> None:
         match="Unexpected failure during dataset validation execution: Unexpected failure",
     ):
         list(stream)
+
+
+def test_required_field_successful_validation() -> None:
+    """Ensure records with all required fields populated pass exactly intact."""
+    records = [
+        _create_dummy_record("hello"),
+        _create_dummy_record("world"),
+    ]
+
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RequiredFieldValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),)
+                ),
+                strategy=RequiredFieldValidator(),
+            ),
+        )
+    )
+
+    validator = DatasetValidator()
+    stream = validator.validate(iter(records), pipeline)
+    results = list(stream)
+
+    assert len(results) == 2
+    assert id(results[0]) == id(records[0])
+
+
+def test_required_field_detects_none() -> None:
+    """Ensure exact None values dynamically throw DatasetValidationError."""
+    # We create a dummy with an explicit None label
+    record = PreprocessedRecord(
+        record=ClassificationRecord(
+            provenance=ProvenanceMetadata(record_index=0),
+            text="hello",
+            label=None,
+        ),
+        partition=PartitionId(name="train"),
+        preprocessing_metadata=PreprocessingMetadata(),
+    )
+
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RequiredFieldValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="label"),)
+                ),
+                strategy=RequiredFieldValidator(),
+            ),
+        )
+    )
+
+    validator = DatasetValidator()
+    stream = validator.validate(iter([record]), pipeline)
+
+    with pytest.raises(
+        DatasetValidationError, match="Mandatory field evaluated to None"
+    ):
+        list(stream)
+
+
+def test_required_field_propagates_field_resolution_error() -> None:
+    """Ensure structural schema mismatches cleanly propagate FieldResolutionError untouched."""
+    record = _create_dummy_record("hello")
+
+    definition = RequiredFieldValidationDefinition(
+        selectors=(SimpleFieldSelector(field_name="missing_field"),)
+    )
+    strategy = RequiredFieldValidator()
+    stream = strategy.validate_stream(iter([record]), definition)
+
+    with pytest.raises(FieldResolutionError, match="not found on record"):
+        list(stream)
+
+
+def test_required_field_allows_falsy_values() -> None:
+    """Ensure empty strings, 0, False, and empty collections natively pass."""
+
+    class DummyRecordWithFalsy(ClassificationRecord):
+        empty_str: str = ""
+        whitespace: str = "   "
+        zero: int = 0
+        false_val: bool = False
+        empty_list: list = []  # type: ignore
+
+    record = PreprocessedRecord(
+        record=DummyRecordWithFalsy(
+            provenance=ProvenanceMetadata(record_index=0), text="hello", label="lbl"
+        ),
+        partition=PartitionId(name="train"),
+        preprocessing_metadata=PreprocessingMetadata(),
+    )
+
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RequiredFieldValidationDefinition(
+                    selectors=(
+                        SimpleFieldSelector(field_name="empty_str"),
+                        SimpleFieldSelector(field_name="whitespace"),
+                        SimpleFieldSelector(field_name="zero"),
+                        SimpleFieldSelector(field_name="false_val"),
+                        SimpleFieldSelector(field_name="empty_list"),
+                    )
+                ),
+                strategy=RequiredFieldValidator(),
+            ),
+        )
+    )
+
+    validator = DatasetValidator()
+    stream = validator.validate(iter([record]), pipeline)
+    results = list(stream)
+
+    assert len(results) == 1
+    assert id(results[0]) == id(record)
+
+
+def test_required_field_compatibility() -> None:
+    """Ensure RequiredFieldValidator exactly requires its exact definition."""
+    with pytest.raises(
+        ValidationConfigurationError,
+        match="requires a RequiredFieldValidationDefinition",
+    ):
+        ValidationStep(
+            definition=MockValidationDefinition(field_name="text"),
+            strategy=RequiredFieldValidator(),
+        )

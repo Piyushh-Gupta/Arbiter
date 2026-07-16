@@ -7,6 +7,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.core.datasets.selectors import FieldSelector
+
 
 class ValidationFailureCode(str, Enum):
     """Strongly typed error codes for validation failures."""
@@ -70,6 +72,16 @@ class ValidationReport(BaseModel):
 
 class ValidationDefinition(BaseModel):
     """Immutable base model for declarative validation parameters."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class RequiredFieldValidationDefinition(ValidationDefinition):
+    """Configuration describing required fields."""
+
+    selectors: tuple[FieldSelector, ...] = Field(
+        ..., description="Fields that must resolve to non-null values."
+    )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
