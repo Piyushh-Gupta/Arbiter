@@ -38,6 +38,7 @@
 - [x] M6.2 Local Filesystem Export
 - [x] M6.3 Hugging Face Hub Export
 - [x] M6.4 Amazon S3 Export
+- [x] M6.5 Export Profiles
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

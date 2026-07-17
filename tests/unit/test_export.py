@@ -18,6 +18,8 @@ from src.core.datasets.export.implementations import (
 from src.core.datasets.export_models import (
     ExportDefinition,
     ExportPipeline,
+    ExportProfile,
+    ExportProfileRegistry,
     ExportStep,
     HuggingFaceExportDefinition,
     HuggingFaceRepositoryType,
@@ -27,7 +29,12 @@ from src.core.datasets.export_models import (
     SerializedArtifact,
 )
 from src.core.datasets.exporter import DatasetExporter
-from src.core.exceptions import ExportConfigurationError, ExportExecutionError
+from src.core.exceptions import (
+    DuplicateExportProfileError,
+    ExportConfigurationError,
+    ExportExecutionError,
+    ExportProfileNotFoundError,
+)
 
 
 class MockExportDefinition(ExportDefinition):
@@ -570,3 +577,84 @@ def test_s3_exporter_botocore_error_wrapping(mock_boto3: MagicMock) -> None:
 
         with pytest.raises(ExportExecutionError, match="Amazon S3 export failed"):
             exporter.export(artifact, definition)
+
+
+def test_export_profile_immutability() -> None:
+    """Ensure ExportProfile is immutable."""
+    profile = ExportProfile(profile_id="test", pipeline=ExportPipeline(steps=()))
+    with pytest.raises(ValidationError):
+        profile.profile_id = "mutated"
+
+
+def test_export_profile_registry_construction() -> None:
+    """Ensure ExportProfileRegistry rejects duplicates eagerly."""
+    p1 = ExportProfile(profile_id="test", pipeline=ExportPipeline(steps=()))
+    p2 = ExportProfile(profile_id="test", pipeline=ExportPipeline(steps=()))
+
+    with pytest.raises(DuplicateExportProfileError, match="is already registered"):
+        ExportProfileRegistry(profiles=(p1, p2))
+
+
+def test_export_profile_registry_resolution() -> None:
+    """Ensure registry resolves profiles accurately and rejects unknowns."""
+    p1 = ExportProfile(profile_id="p1", pipeline=ExportPipeline(steps=()))
+    registry = ExportProfileRegistry(profiles=(p1,))
+
+    # Successful resolution
+    resolved = registry.resolve("p1")
+    assert resolved is p1
+
+    # Unknown resolution
+    with pytest.raises(ExportProfileNotFoundError, match="not found in registry"):
+        registry.resolve("unknown")
+
+
+def test_export_profile_execution_equivalence() -> None:
+    """Ensure extracting pipeline from profile yields identical execution behavior."""
+    mock_exporter_1 = MagicMock(spec=BaseExporter)
+    mock_exporter_2 = MagicMock(spec=BaseExporter)
+
+    # Exporter must return None from validate_compatibility to pass
+    mock_exporter_1.validate_compatibility.return_value = None
+    mock_exporter_2.validate_compatibility.return_value = None
+
+    artifact = SerializedArtifact(root_path=Path("/tmp/fake"))
+
+    step1 = ExportStep(
+        definition=MockExportDefinition(target_name="dest1"), strategy=mock_exporter_1
+    )
+    step2 = ExportStep(
+        definition=MockExportDefinition(target_name="dest2"), strategy=mock_exporter_2
+    )
+    pipeline = ExportPipeline(steps=(step1, step2))
+
+    # Setup profile
+    profile = ExportProfile(profile_id="prod", pipeline=pipeline)
+    registry = ExportProfileRegistry(profiles=(profile,))
+
+    # Scenario 1: Direct Execution
+    exporter_orchestrator = DatasetExporter()
+    exporter_orchestrator.export(artifact, pipeline)
+
+    call_args_1_direct = mock_exporter_1.export.call_args[0]
+    call_args_2_direct = mock_exporter_2.export.call_args[0]
+
+    assert call_args_1_direct[0] is artifact
+    assert call_args_2_direct[0] is artifact
+
+    # Reset mocks
+    mock_exporter_1.reset_mock()
+    mock_exporter_2.reset_mock()
+
+    # Scenario 2: Profile Execution
+    resolved_profile = registry.resolve("prod")
+    exporter_orchestrator.export(artifact, resolved_profile.pipeline)
+
+    call_args_1_profile = mock_exporter_1.export.call_args[0]
+    call_args_2_profile = mock_exporter_2.export.call_args[0]
+
+    # Verify execution identity
+    assert call_args_1_profile[0] is artifact
+    assert call_args_2_profile[0] is artifact
+    assert mock_exporter_1.export.call_count == 1
+    assert mock_exporter_2.export.call_count == 1

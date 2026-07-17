@@ -1,6 +1,10 @@
 """Custom exceptions for the Arbiter project."""
 
 
+class ArbiterError(Exception):
+    """Base exception for all Arbiter domain errors."""
+
+
 class ConfigurationError(Exception):
     """Raised when there is a configuration or environment error."""
 
@@ -241,7 +245,15 @@ class ExportConfigurationError(Exception):
     pass
 
 
-class ExportExecutionError(Exception):
-    """Raised when the export pipeline encounters an unexpected failure."""
+class ExportExecutionError(ArbiterError):
+    """Raised when an export pipeline encounters a transport or IO failure."""
+
+
+class DuplicateExportProfileError(ArbiterError):
+    """Raised when an export profile identifier is duplicated within a registry."""
+
+
+class ExportProfileNotFoundError(ArbiterError):
+    """Raised when an export profile identifier cannot be resolved."""
 
     pass
