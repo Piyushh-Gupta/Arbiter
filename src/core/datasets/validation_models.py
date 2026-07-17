@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing
 from enum import Enum
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -94,6 +95,39 @@ class EmptyTextValidationDefinition(ValidationDefinition):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class LengthValidationDefinition(ValidationDefinition):
+    """Configuration describing required length constraints for text fields."""
+
+    selectors: tuple[FieldSelector, ...] = Field(
+        ..., description="Fields that must satisfy the length constraints."
+    )
+    min_length: Annotated[int, Field(ge=0)] | None = Field(
+        default=None, description="Minimum allowed length."
+    )
+    max_length: Annotated[int, Field(ge=0)] | None = Field(
+        default=None, description="Maximum allowed length."
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> "LengthValidationDefinition":
+        if self.min_length is None and self.max_length is None:
+            # We raise ValueError instead of ValidationConfigurationError here because
+            # this is a pydantic model constraint. Pydantic handles ValueError natively.
+            raise ValueError(
+                "At least one of min_length or max_length must be configured."
+            )
+
+        if self.min_length is not None and self.max_length is not None:
+            if self.min_length > self.max_length:
+                raise ValueError(
+                    "min_length cannot be strictly greater than max_length."
+                )
+
+        return self
 
 
 if typing.TYPE_CHECKING:

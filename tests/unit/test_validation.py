@@ -17,10 +17,12 @@ from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.datasets.validation.base import BaseValidator
 from src.core.datasets.validation.implementations import (
     EmptyTextValidator,
+    LengthValidator,
     RequiredFieldValidator,
 )
 from src.core.datasets.validation_models import (
     EmptyTextValidationDefinition,
+    LengthValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
     ValidationPipeline,
@@ -408,4 +410,156 @@ def test_empty_text_compatibility() -> None:
         ValidationStep(
             definition=MockValidationDefinition(field_name="text"),
             strategy=EmptyTextValidator(),
+        )
+
+
+def test_length_validation_config_errors() -> None:
+    """Ensure LengthValidationDefinition enforces config correctly."""
+    # 1. Missing both bounds
+    with pytest.raises(
+        ValueError, match="At least one of min_length or max_length must be configured"
+    ):
+        LengthValidationDefinition(selectors=(SimpleFieldSelector(field_name="text"),))
+
+    # 2. Negative bounds (Pydantic ValidationError)
+    with pytest.raises(ValidationError):
+        LengthValidationDefinition(
+            selectors=(SimpleFieldSelector(field_name="text"),), min_length=-1
+        )
+
+    with pytest.raises(ValidationError):
+        LengthValidationDefinition(
+            selectors=(SimpleFieldSelector(field_name="text"),), max_length=-5
+        )
+
+    # 3. Minimum > Maximum
+    with pytest.raises(
+        ValueError, match="min_length cannot be strictly greater than max_length"
+    ):
+        LengthValidationDefinition(
+            selectors=(SimpleFieldSelector(field_name="text"),),
+            min_length=10,
+            max_length=5,
+        )
+
+
+def test_length_validation_minimum_only() -> None:
+    """Ensure minimum length constraint evaluated correctly."""
+    records = [
+        _create_dummy_record("123"),
+        _create_dummy_record("1234"),
+    ]
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=LengthValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),), min_length=3
+                ),
+                strategy=LengthValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+    stream = validator.validate(iter(records), pipeline)
+
+    # Pass exactly min and above min
+    results = list(stream)
+    assert len(results) == 2
+
+    # Fail below min
+    bad_record = _create_dummy_record("12")
+    stream = validator.validate(iter([bad_record]), pipeline)
+    with pytest.raises(DatasetValidationError, match="strictly below minimum"):
+        list(stream)
+
+
+def test_length_validation_maximum_only() -> None:
+    """Ensure maximum length constraint evaluated correctly."""
+    records = [
+        _create_dummy_record("12"),
+        _create_dummy_record("123"),
+    ]
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=LengthValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),), max_length=3
+                ),
+                strategy=LengthValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+    stream = validator.validate(iter(records), pipeline)
+
+    # Pass below max and exactly max
+    results = list(stream)
+    assert len(results) == 2
+
+    # Fail above max
+    bad_record = _create_dummy_record("1234")
+    stream = validator.validate(iter([bad_record]), pipeline)
+    with pytest.raises(DatasetValidationError, match="strictly above maximum"):
+        list(stream)
+
+
+def test_length_validation_both_bounds() -> None:
+    """Ensure exact range evaluations evaluated correctly."""
+    records = [
+        _create_dummy_record("12"),
+        _create_dummy_record("123"),
+        _create_dummy_record("1234"),
+    ]
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=LengthValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    min_length=2,
+                    max_length=4,
+                ),
+                strategy=LengthValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+    stream = validator.validate(iter(records), pipeline)
+
+    # Pass inside range
+    results = list(stream)
+    assert len(results) == 3
+
+    # Fail below min
+    stream = validator.validate(iter([_create_dummy_record("1")]), pipeline)
+    with pytest.raises(DatasetValidationError, match="strictly below minimum"):
+        list(stream)
+
+    # Fail above max
+    stream = validator.validate(iter([_create_dummy_record("12345")]), pipeline)
+    with pytest.raises(DatasetValidationError, match="strictly above maximum"):
+        list(stream)
+
+
+def test_length_validation_propagates_field_resolution_error() -> None:
+    """Ensure structural schema mismatches cleanly propagate FieldResolutionError untouched."""
+    record = _create_dummy_record("hello")
+
+    definition = LengthValidationDefinition(
+        selectors=(SimpleFieldSelector(field_name="missing_field"),), min_length=1
+    )
+    strategy = LengthValidator()
+    stream = strategy.validate_stream(iter([record]), definition)
+
+    with pytest.raises(FieldResolutionError, match="not found on record"):
+        list(stream)
+
+
+def test_length_validation_compatibility() -> None:
+    """Ensure LengthValidator exactly requires its exact definition."""
+    with pytest.raises(
+        ValidationConfigurationError, match="requires a LengthValidationDefinition"
+    ):
+        ValidationStep(
+            definition=MockValidationDefinition(field_name="text"),
+            strategy=LengthValidator(),
         )

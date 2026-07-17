@@ -6,6 +6,7 @@ from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.validation.base import BaseValidator
 from src.core.datasets.validation_models import (
     EmptyTextValidationDefinition,
+    LengthValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
 )
@@ -86,4 +87,54 @@ class EmptyTextValidator(BaseValidator):
         if not isinstance(definition, EmptyTextValidationDefinition):
             raise ValidationConfigurationError(
                 "EmptyTextValidator requires an EmptyTextValidationDefinition."
+            )
+
+
+class LengthValidator(BaseValidator):
+    """Stateless validator verifying that text fields satisfy configured length bounds."""
+
+    def validate_stream(
+        self,
+        stream: Iterator[PreprocessedRecord],
+        definition: ValidationDefinition,
+    ) -> Iterator[PreprocessedRecord]:
+        """
+        Validates records ensuring configured text fields meet length bounds.
+
+        Propagates FieldResolutionError unchanged for structural schema mismatch.
+        Raises DatasetValidationError strictly on encountering length violations.
+        Preserves object identity identically through the pipeline natively.
+        """
+        assert isinstance(definition, LengthValidationDefinition)
+
+        for preprocessed_record in stream:
+            for selector in definition.selectors:
+                value = selector.resolve(preprocessed_record.record)
+
+                val_len = len(value)
+
+                if (
+                    definition.min_length is not None
+                    and val_len < definition.min_length
+                ):
+                    raise DatasetValidationError(
+                        f"Validation failed: Length {val_len} is strictly below minimum {definition.min_length} via {selector}"
+                    )
+
+                if (
+                    definition.max_length is not None
+                    and val_len > definition.max_length
+                ):
+                    raise DatasetValidationError(
+                        f"Validation failed: Length {val_len} is strictly above maximum {definition.max_length} via {selector}"
+                    )
+
+            # Preserve identical underlying immutable object exactly passing it downward
+            yield preprocessed_record
+
+    def validate_compatibility(self, definition: ValidationDefinition) -> None:
+        """Enforces strictly bound execution parameters at model construction statically."""
+        if not isinstance(definition, LengthValidationDefinition):
+            raise ValidationConfigurationError(
+                "LengthValidator requires a LengthValidationDefinition."
             )

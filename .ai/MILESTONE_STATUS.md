@@ -25,6 +25,7 @@
 - [x] M4.1 Dataset Validation Framework
 - [x] M4.2 Required Field Validation
 - [x] M4.3 Empty Text Validation
+- [x] M4.4 Length Validation
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.
