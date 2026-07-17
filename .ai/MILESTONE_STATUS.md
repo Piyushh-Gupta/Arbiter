@@ -35,6 +35,7 @@
 - [x] M5.4 Dataset Manifest Generation
 - [x] M5.5 Serialization Profiles
 - [x] M6.1 Dataset Export Framework
+- [x] M6.2 Local Filesystem Export
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

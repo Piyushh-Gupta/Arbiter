@@ -7,10 +7,12 @@ import pytest
 from pydantic import ConfigDict, ValidationError
 
 from src.core.datasets.export.base import BaseExporter
+from src.core.datasets.export.implementations import LocalExporter
 from src.core.datasets.export_models import (
     ExportDefinition,
     ExportPipeline,
     ExportStep,
+    LocalExportDefinition,
     SerializedArtifact,
 )
 from src.core.datasets.exporter import DatasetExporter
@@ -169,3 +171,131 @@ def test_dataset_exporter_fail_fast() -> None:
 
         # Verify step1 executed, but step3 did not
         assert trace == [f"export:A:{expected_name}"]
+
+
+def test_local_export_definition_immutability() -> None:
+    """Ensure LocalExportDefinition is frozen."""
+    definition = LocalExportDefinition(destination_root=Path("/dest"))
+    with pytest.raises(ValidationError):
+        definition.destination_root = Path("/mutated")
+
+
+def test_local_exporter_compatibility() -> None:
+    """Ensure LocalExporter rejects invalid definitions."""
+    exporter = LocalExporter()
+    definition = MockExportDefinition(target_name="test")
+    with pytest.raises(
+        ExportConfigurationError, match="LocalExporter requires LocalExportDefinition"
+    ):
+        exporter.validate_compatibility(definition)
+
+
+def test_local_exporter_file_export() -> None:
+    """Ensure exact single file export and destination parent creation."""
+    exporter = LocalExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_file = root_path / "source.txt"
+        source_file.write_text("hello world")
+
+        artifact = SerializedArtifact(root_path=source_file)
+
+        dest_file = root_path / "nested" / "dest" / "target.txt"
+        definition = LocalExportDefinition(destination_root=dest_file)
+
+        exporter.export(artifact, definition)
+
+        assert dest_file.exists()
+        assert dest_file.read_text() == "hello world"
+
+
+def test_local_exporter_dir_export() -> None:
+    """Ensure exact directory export."""
+    exporter = LocalExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_dir = root_path / "source_dir"
+        source_dir.mkdir()
+        (source_dir / "file1.txt").write_text("data1")
+        (source_dir / "file2.txt").write_text("data2")
+
+        artifact = SerializedArtifact(root_path=source_dir)
+
+        dest_dir = root_path / "dest_dir"
+        definition = LocalExportDefinition(destination_root=dest_dir)
+
+        exporter.export(artifact, definition)
+
+        assert dest_dir.exists()
+        assert dest_dir.is_dir()
+        assert (dest_dir / "file1.txt").read_text() == "data1"
+        assert (dest_dir / "file2.txt").read_text() == "data2"
+
+
+def test_local_exporter_overwrite_disabled() -> None:
+    """Ensure export fails when destination exists and overwrite is disabled."""
+    exporter = LocalExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_file = root_path / "source.txt"
+        source_file.write_text("hello")
+        artifact = SerializedArtifact(root_path=source_file)
+
+        dest_file = root_path / "dest.txt"
+        dest_file.write_text("existing")
+        definition = LocalExportDefinition(
+            destination_root=dest_file, overwrite_existing=False
+        )
+
+        with pytest.raises(
+            ExportExecutionError, match="already exists and overwrite is disabled"
+        ):
+            exporter.export(artifact, definition)
+
+
+def test_local_exporter_overwrite_enabled_clears_stale_files() -> None:
+    """Ensure overwrite=True completely replaces the target, leaving no stale files."""
+    exporter = LocalExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+
+        # Source with one file
+        source_dir = root_path / "source_dir"
+        source_dir.mkdir()
+        (source_dir / "new_file.txt").write_text("new_data")
+        artifact = SerializedArtifact(root_path=source_dir)
+
+        # Dest with a stale file
+        dest_dir = root_path / "dest_dir"
+        dest_dir.mkdir()
+        (dest_dir / "stale_file.txt").write_text("stale_data")
+        definition = LocalExportDefinition(
+            destination_root=dest_dir, overwrite_existing=True
+        )
+
+        exporter.export(artifact, definition)
+
+        assert dest_dir.exists()
+        assert (dest_dir / "new_file.txt").exists()
+        assert not (dest_dir / "stale_file.txt").exists()
+
+
+def test_local_exporter_os_error_wrapping() -> None:
+    """Ensure OS errors are safely wrapped."""
+    exporter = LocalExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        # Source doesn't exist, will cause FileNotFoundError in shutil
+        source_file = root_path / "missing.txt"
+        artifact = SerializedArtifact(root_path=source_file)
+
+        dest_file = root_path / "dest.txt"
+        definition = LocalExportDefinition(destination_root=dest_file)
+
+        with pytest.raises(ExportExecutionError, match="Failed to export"):
+            exporter.export(artifact, definition)
