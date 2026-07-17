@@ -193,6 +193,18 @@ class ValidationConfigurationError(Exception):
     pass
 
 
+class ValidationProfileNotFoundError(Exception):
+    """Raised when a requested validation profile cannot be found."""
+
+    pass
+
+
+class DuplicateValidationProfileError(Exception):
+    """Raised when attempting to register a validation profile with an existing identifier."""
+
+    pass
+
+
 class ValidationExecutionError(Exception):
     """Raised when the validation pipeline encounters an unexpected failure."""
 

@@ -5,11 +5,15 @@ from __future__ import annotations
 import re
 import typing
 from enum import Enum
-from typing import Annotated, Pattern
+from typing import Annotated, Mapping, Pattern
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from src.core.datasets.selectors import FieldSelector
+from src.core.exceptions import (
+    DuplicateValidationProfileError,
+    ValidationProfileNotFoundError,
+)
 
 
 class ValidationFailureCode(str, Enum):
@@ -180,6 +184,53 @@ class RegexValidationDefinition(ValidationDefinition):
         except re.error as e:
             raise ValueError(f"Invalid regular expression pattern: {e}")
         return self
+
+
+class ValidationProfile(BaseModel):
+    """Immutable reusable wrapper representing a pre-configured ValidationPipeline."""
+
+    profile_id: str = Field(
+        ..., description="Unique identifier for this validation profile."
+    )
+    pipeline: ValidationPipeline = Field(
+        ...,
+        description="The strictly immutable validation pipeline executing this profile.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class ValidationProfileRegistry(BaseModel):
+    """Immutable namespace for securely resolving named validation profiles."""
+
+    profiles: tuple[ValidationProfile, ...] = Field(
+        ..., description="The collection of registered validation profiles."
+    )
+
+    _profile_index: Mapping[str, ValidationProfile] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_index(self) -> "ValidationProfileRegistry":
+        index = {}
+        for profile in self.profiles:
+            if profile.profile_id in index:
+                raise DuplicateValidationProfileError(
+                    f"Duplicate validation profile identifier: {profile.profile_id}"
+                )
+            index[profile.profile_id] = profile
+
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> ValidationProfile:
+        """Resolves a profile by identifier."""
+        if profile_id not in self._profile_index:
+            raise ValidationProfileNotFoundError(
+                f"Validation profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]
 
 
 if typing.TYPE_CHECKING:

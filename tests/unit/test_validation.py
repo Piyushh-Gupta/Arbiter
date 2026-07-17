@@ -31,14 +31,18 @@ from src.core.datasets.validation_models import (
     RequiredFieldValidationDefinition,
     ValidationDefinition,
     ValidationPipeline,
+    ValidationProfile,
+    ValidationProfileRegistry,
     ValidationStep,
 )
 from src.core.datasets.validator import DatasetValidator
 from src.core.exceptions import (
     DatasetValidationError,
+    DuplicateValidationProfileError,
     FieldResolutionError,
     ValidationConfigurationError,
     ValidationExecutionError,
+    ValidationProfileNotFoundError,
 )
 
 
@@ -810,3 +814,108 @@ def test_regex_validation_compatibility() -> None:
             definition=MockValidationDefinition(field_name="text"),
             strategy=RegexValidator(),
         )
+
+
+def _create_sample_pipeline() -> ValidationPipeline:
+    return ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RequiredFieldValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),)
+                ),
+                strategy=RequiredFieldValidator(),
+            ),
+        )
+    )
+
+
+def test_validation_profile_registry_success() -> None:
+    """Ensure registry initializes correctly with unique profiles."""
+    pipeline = _create_sample_pipeline()
+    profile1 = ValidationProfile(profile_id="prof1", pipeline=pipeline)
+    profile2 = ValidationProfile(profile_id="prof2", pipeline=pipeline)
+
+    registry = ValidationProfileRegistry(profiles=(profile1, profile2))
+    assert len(registry.profiles) == 2
+
+
+def test_validation_profile_registry_duplicate() -> None:
+    """Ensure registry rejects duplicate profile identifiers."""
+    pipeline = _create_sample_pipeline()
+    profile1 = ValidationProfile(profile_id="same", pipeline=pipeline)
+    profile2 = ValidationProfile(profile_id="same", pipeline=pipeline)
+
+    with pytest.raises(
+        DuplicateValidationProfileError, match="Duplicate validation profile identifier"
+    ):
+        ValidationProfileRegistry(profiles=(profile1, profile2))
+
+
+def test_validation_profile_registry_resolution() -> None:
+    """Ensure registry correctly resolves a known profile."""
+    pipeline = _create_sample_pipeline()
+    profile = ValidationProfile(profile_id="my_profile", pipeline=pipeline)
+    registry = ValidationProfileRegistry(profiles=(profile,))
+
+    resolved = registry.resolve("my_profile")
+    assert resolved.profile_id == "my_profile"
+    assert resolved.pipeline is pipeline
+
+
+def test_validation_profile_registry_unknown_profile() -> None:
+    """Ensure registry throws cleanly on unknown profile."""
+    registry = ValidationProfileRegistry(profiles=())
+
+    with pytest.raises(
+        ValidationProfileNotFoundError, match="Validation profile not found"
+    ):
+        registry.resolve("unknown")
+
+
+def test_validation_profile_execution_equivalence() -> None:
+    """Ensure executing a profile-resolved pipeline is identical to direct execution."""
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=LengthValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),), max_length=5
+                ),
+                strategy=LengthValidator(),
+            ),
+        )
+    )
+
+    profile = ValidationProfile(profile_id="len_prof", pipeline=pipeline)
+    registry = ValidationProfileRegistry(profiles=(profile,))
+
+    resolved_pipeline = registry.resolve("len_prof").pipeline
+
+    records = [
+        _create_dummy_record("123"),
+        _create_dummy_record("1234"),
+    ]
+
+    validator1 = DatasetValidator()
+    validator2 = DatasetValidator()
+
+    # Execute direct
+    result_direct = list(validator1.validate(iter(records), pipeline))
+
+    # Execute resolved
+    result_resolved = list(validator2.validate(iter(records), resolved_pipeline))
+
+    assert len(result_direct) == 2
+    assert len(result_resolved) == 2
+
+    # Verify exact object identity preservation across both identically
+    assert result_direct[0] is records[0]
+    assert result_resolved[0] is records[0]
+
+    # Verify fail fast equivalence
+    bad_record = [_create_dummy_record("123456")]
+
+    with pytest.raises(DatasetValidationError):
+        list(validator1.validate(iter(bad_record), pipeline))
+
+    with pytest.raises(DatasetValidationError):
+        list(validator2.validate(iter(bad_record), resolved_pipeline))
