@@ -27,6 +27,7 @@
 - [x] M4.3 Empty Text Validation
 - [x] M4.4 Length Validation
 - [x] M4.5 Label Validation
+- [x] M4.6 Regex Validation
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

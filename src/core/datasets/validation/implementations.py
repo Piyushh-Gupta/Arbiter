@@ -8,6 +8,8 @@ from src.core.datasets.validation_models import (
     EmptyTextValidationDefinition,
     LabelValidationDefinition,
     LengthValidationDefinition,
+    RegexMatchMode,
+    RegexValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
 )
@@ -175,4 +177,54 @@ class LabelValidator(BaseValidator):
         if not isinstance(definition, LabelValidationDefinition):
             raise ValidationConfigurationError(
                 "LabelValidator requires a LabelValidationDefinition."
+            )
+
+
+class RegexValidator(BaseValidator):
+    """Stateless validator verifying that text fields match a configured regular expression."""
+
+    def validate_stream(
+        self,
+        stream: Iterator[PreprocessedRecord],
+        definition: ValidationDefinition,
+    ) -> Iterator[PreprocessedRecord]:
+        """
+        Validates records ensuring configured text fields match the regex pattern.
+
+        Propagates FieldResolutionError unchanged for structural schema mismatch.
+        Raises DatasetValidationError strictly on encountering regex mismatch.
+        Preserves object identity identically through the pipeline natively.
+        """
+        assert isinstance(definition, RegexValidationDefinition)
+
+        for preprocessed_record in stream:
+            for selector in definition.selectors:
+                value = selector.resolve(preprocessed_record.record)
+
+                if definition.match_mode == RegexMatchMode.FULLMATCH:
+                    match = definition._compiled_pattern.fullmatch(value)
+                elif definition.match_mode == RegexMatchMode.MATCH:
+                    match = definition._compiled_pattern.match(value)
+                elif definition.match_mode == RegexMatchMode.SEARCH:
+                    match = definition._compiled_pattern.search(value)
+                else:
+                    # Should be impossible due to Pydantic Enum validation
+                    raise ValidationConfigurationError(
+                        f"Unsupported match mode: {definition.match_mode}"
+                    )
+
+                if match is None:
+                    raise DatasetValidationError(
+                        f"Validation failed: Text '{value}' does not match regex pattern '{definition.pattern}' "
+                        f"using mode {definition.match_mode.value} via {selector}"
+                    )
+
+            # Preserve identical underlying immutable object exactly passing it downward
+            yield preprocessed_record
+
+    def validate_compatibility(self, definition: ValidationDefinition) -> None:
+        """Enforces strictly bound execution parameters at model construction statically."""
+        if not isinstance(definition, RegexValidationDefinition):
+            raise ValidationConfigurationError(
+                "RegexValidator requires a RegexValidationDefinition."
             )

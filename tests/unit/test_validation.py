@@ -19,12 +19,15 @@ from src.core.datasets.validation.implementations import (
     EmptyTextValidator,
     LabelValidator,
     LengthValidator,
+    RegexValidator,
     RequiredFieldValidator,
 )
 from src.core.datasets.validation_models import (
     EmptyTextValidationDefinition,
     LabelValidationDefinition,
     LengthValidationDefinition,
+    RegexMatchMode,
+    RegexValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
     ValidationPipeline,
@@ -657,4 +660,153 @@ def test_label_validation_compatibility() -> None:
         ValidationStep(
             definition=MockValidationDefinition(field_name="text"),
             strategy=LabelValidator(),
+        )
+
+
+def test_regex_validation_config_errors() -> None:
+    """Ensure RegexValidationDefinition enforces config correctly."""
+    # Empty pattern
+    with pytest.raises(ValidationError):
+        RegexValidationDefinition(
+            selectors=(SimpleFieldSelector(field_name="text"),), pattern=""
+        )
+
+    # Invalid regex syntax
+    with pytest.raises(ValueError, match="Invalid regular expression pattern"):
+        RegexValidationDefinition(
+            selectors=(SimpleFieldSelector(field_name="text"),), pattern="[unclosed"
+        )
+
+
+def test_regex_validation_fullmatch() -> None:
+    """Ensure fullmatch mode strictly matches the entire string."""
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RegexValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    pattern=r"^[A-Z]{3}-\d{4}$",
+                    match_mode=RegexMatchMode.FULLMATCH,
+                ),
+                strategy=RegexValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+
+    # Pass exact match
+    results = list(
+        validator.validate(iter([_create_dummy_record("ABC-1234")]), pipeline)
+    )
+    assert len(results) == 1
+
+    # Fail substring match
+    with pytest.raises(DatasetValidationError, match="does not match regex pattern"):
+        list(validator.validate(iter([_create_dummy_record("ABC-1234X")]), pipeline))
+
+
+def test_regex_validation_match() -> None:
+    """Ensure match mode matches strictly at the beginning."""
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RegexValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    pattern=r"abc",
+                    match_mode=RegexMatchMode.MATCH,
+                ),
+                strategy=RegexValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+
+    # Pass exact prefix
+    results = list(validator.validate(iter([_create_dummy_record("abcdef")]), pipeline))
+    assert len(results) == 1
+
+    # Fail middle substring
+    with pytest.raises(DatasetValidationError, match="does not match regex pattern"):
+        list(validator.validate(iter([_create_dummy_record("xyzabcdef")]), pipeline))
+
+
+def test_regex_validation_search() -> None:
+    """Ensure search mode matches anywhere in the string."""
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RegexValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    pattern=r"xyz",
+                    match_mode=RegexMatchMode.SEARCH,
+                ),
+                strategy=RegexValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+
+    # Pass exact substring
+    results = list(
+        validator.validate(iter([_create_dummy_record("abcxyzdef")]), pipeline)
+    )
+    assert len(results) == 1
+
+    # Fail missing substring
+    with pytest.raises(DatasetValidationError, match="does not match regex pattern"):
+        list(validator.validate(iter([_create_dummy_record("abcdef")]), pipeline))
+
+
+def test_regex_validation_failure() -> None:
+    """Ensure invalid regex strings throw DatasetValidationError cleanly."""
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=RegexValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    pattern=r"\d+",
+                ),
+                strategy=RegexValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+
+    bad_texts = [
+        "abc",
+        "",  # Empty string
+        "   ",  # Whitespace
+    ]
+
+    for text in bad_texts:
+        bad_record = _create_dummy_record(text)
+        stream = validator.validate(iter([bad_record]), pipeline)
+        with pytest.raises(
+            DatasetValidationError, match="does not match regex pattern"
+        ):
+            list(stream)
+
+
+def test_regex_validation_propagates_field_resolution_error() -> None:
+    """Ensure structural schema mismatches cleanly propagate FieldResolutionError untouched."""
+    record = _create_dummy_record("123")
+
+    definition = RegexValidationDefinition(
+        selectors=(SimpleFieldSelector(field_name="missing_field"),), pattern=r"\d+"
+    )
+    strategy = RegexValidator()
+    stream = strategy.validate_stream(iter([record]), definition)
+
+    with pytest.raises(FieldResolutionError, match="not found on record"):
+        list(stream)
+
+
+def test_regex_validation_compatibility() -> None:
+    """Ensure RegexValidator exactly requires its exact definition."""
+    with pytest.raises(
+        ValidationConfigurationError, match="requires a RegexValidationDefinition"
+    ):
+        ValidationStep(
+            definition=MockValidationDefinition(field_name="text"),
+            strategy=RegexValidator(),
         )

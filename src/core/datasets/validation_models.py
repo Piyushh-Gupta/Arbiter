@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import typing
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Pattern
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from src.core.datasets.selectors import FieldSelector
 
@@ -144,6 +145,41 @@ class LabelValidationDefinition(ValidationDefinition):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class RegexMatchMode(str, Enum):
+    FULLMATCH = "fullmatch"
+    MATCH = "match"
+    SEARCH = "search"
+
+
+class RegexValidationDefinition(ValidationDefinition):
+    """Configuration describing required regex match constraints for text fields."""
+
+    selectors: tuple[FieldSelector, ...] = Field(
+        ..., description="Fields that must satisfy the regex pattern.", min_length=1
+    )
+
+    pattern: str = Field(
+        ..., description="The regular expression pattern.", min_length=1
+    )
+
+    match_mode: RegexMatchMode = Field(
+        default=RegexMatchMode.FULLMATCH,
+        description="The mode used to match the pattern.",
+    )
+
+    _compiled_pattern: Pattern[str] = PrivateAttr()
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _compile_regex(self) -> "RegexValidationDefinition":
+        try:
+            self._compiled_pattern = re.compile(self.pattern)
+        except re.error as e:
+            raise ValueError(f"Invalid regular expression pattern: {e}")
+        return self
 
 
 if typing.TYPE_CHECKING:
