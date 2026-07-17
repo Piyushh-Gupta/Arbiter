@@ -24,12 +24,16 @@ from src.core.datasets.serialization_models import (
     SerializationDefinition,
     SerializationFormat,
     SerializationPipeline,
+    SerializationProfile,
+    SerializationProfileRegistry,
     SerializationStep,
 )
 from src.core.datasets.serializer import DatasetSerializer
 from src.core.exceptions import (
+    DuplicateSerializationProfileError,
     SerializationConfigurationError,
     SerializationExecutionError,
+    SerializationProfileNotFoundError,
 )
 
 
@@ -527,3 +531,126 @@ def test_manifest_serializer_empty_stream() -> None:
             written = json.load(f)
         assert written["manifest_version"] == "1.0"
         assert written["serialization_format"] == "jsonl"
+
+
+def test_serialization_profile_immutability() -> None:
+    """Ensure SerializationProfile is frozen."""
+    definition = MockSerializationDefinition(target_name="test")
+    strategy = MockSerializer(trace_list=[])
+    step = SerializationStep(definition=definition, strategy=strategy)
+    pipeline = SerializationPipeline(steps=(step,))
+    profile = SerializationProfile(profile_id="test_profile", pipeline=pipeline)
+
+    with pytest.raises(ValidationError):
+        profile.profile_id = "mutated"
+
+
+def test_serialization_profile_registry_immutability() -> None:
+    """Ensure SerializationProfileRegistry is frozen."""
+    definition = MockSerializationDefinition(target_name="test")
+    strategy = MockSerializer(trace_list=[])
+    step = SerializationStep(definition=definition, strategy=strategy)
+    pipeline = SerializationPipeline(steps=(step,))
+    profile = SerializationProfile(profile_id="test_profile", pipeline=pipeline)
+    registry = SerializationProfileRegistry(profiles=(profile,))
+
+    with pytest.raises(ValidationError):
+        registry.profiles = ()
+
+
+def test_duplicate_serialization_profile() -> None:
+    """Ensure DuplicateSerializationProfileError is raised on collision."""
+    definition = MockSerializationDefinition(target_name="test")
+    strategy = MockSerializer(trace_list=[])
+    step = SerializationStep(definition=definition, strategy=strategy)
+    pipeline = SerializationPipeline(steps=(step,))
+    profile1 = SerializationProfile(profile_id="duplicate", pipeline=pipeline)
+    profile2 = SerializationProfile(profile_id="duplicate", pipeline=pipeline)
+
+    with pytest.raises(DuplicateSerializationProfileError, match="duplicate"):
+        SerializationProfileRegistry(profiles=(profile1, profile2))
+
+
+def test_resolve_serialization_profile() -> None:
+    """Ensure a valid profile is resolved properly."""
+    definition = MockSerializationDefinition(target_name="test")
+    strategy = MockSerializer(trace_list=[])
+    step = SerializationStep(definition=definition, strategy=strategy)
+    pipeline = SerializationPipeline(steps=(step,))
+    profile = SerializationProfile(profile_id="test_profile", pipeline=pipeline)
+    registry = SerializationProfileRegistry(profiles=(profile,))
+
+    resolved = registry.resolve("test_profile")
+    assert resolved is profile
+
+
+def test_unknown_serialization_profile() -> None:
+    """Ensure SerializationProfileNotFoundError is raised for unknown profiles."""
+    registry = SerializationProfileRegistry(profiles=())
+    with pytest.raises(SerializationProfileNotFoundError, match="unknown"):
+        registry.resolve("unknown")
+
+
+def test_execution_equivalence() -> None:
+    """Ensure execution via profile resolution matches direct pipeline execution identically."""
+    trace_direct: list[str] = []
+    trace_profile: list[str] = []
+
+    # We create two distinct strategy instances (otherwise trace would mix)
+    # but they exhibit identical behavior.
+    strategy_direct = MockSerializer(trace_list=trace_direct)
+    strategy_profile = MockSerializer(trace_list=trace_profile)
+
+    definition = MockSerializationDefinition(target_name="test")
+
+    pipeline_direct = SerializationPipeline(
+        steps=(SerializationStep(definition=definition, strategy=strategy_direct),)
+    )
+    pipeline_profile = SerializationPipeline(
+        steps=(SerializationStep(definition=definition, strategy=strategy_profile),)
+    )
+
+    profile = SerializationProfile(profile_id="eq_profile", pipeline=pipeline_profile)
+    registry = SerializationProfileRegistry(profiles=(profile,))
+
+    # The dummy records to feed
+    records_direct = [_create_dummy_record("rec1"), _create_dummy_record("rec2")]
+    records_profile = [_create_dummy_record("rec1"), _create_dummy_record("rec2")]
+
+    # Profile execution
+    serializer_profile = DatasetSerializer()
+    resolved_profile = registry.resolve("eq_profile")
+
+    # We will use generators to feed the records and capture the execution flow securely
+    def gen_direct() -> Iterator[PreprocessedRecord]:
+        yield from records_direct
+
+    def gen_profile() -> Iterator[PreprocessedRecord]:
+        yield from records_profile
+
+    # Execute through orchestrator
+    serializer_direct = DatasetSerializer()
+    serializer_direct.serialize(gen_direct(), pipeline_direct)
+    serializer_profile.serialize(gen_profile(), resolved_profile.pipeline)
+
+    # Identical invocation order ensures identical fail-fast behavior and exception propagation
+    assert trace_direct == ["test:rec1", "test:rec2"]
+    assert trace_profile == ["test:rec1", "test:rec2"]
+
+    # To strictly verify yielded object identities and iterator semantics, we execute the pipeline directly
+    stream_direct = iter(records_direct)
+    for step in pipeline_direct.steps:
+        stream_direct = step.strategy.serialize_stream(stream_direct, step.definition)
+    direct_results = list(stream_direct)
+
+    stream_profile = iter(records_profile)
+    for step in resolved_profile.pipeline.steps:
+        stream_profile = step.strategy.serialize_stream(stream_profile, step.definition)
+    profile_results = list(stream_profile)
+
+    assert len(direct_results) == 2
+    assert len(profile_results) == 2
+    assert direct_results[0] is records_direct[0]
+    assert direct_results[1] is records_direct[1]
+    assert profile_results[0] is records_profile[0]
+    assert profile_results[1] is records_profile[1]

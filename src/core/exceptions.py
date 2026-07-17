@@ -221,3 +221,15 @@ class SerializationExecutionError(Exception):
     """Raised when the serialization pipeline encounters an unexpected failure."""
 
     pass
+
+
+class DuplicateSerializationProfileError(Exception):
+    """Raised when a SerializationProfileRegistry encounters a duplicate profile_id."""
+
+    pass
+
+
+class SerializationProfileNotFoundError(Exception):
+    """Raised when a requested SerializationProfile cannot be resolved."""
+
+    pass

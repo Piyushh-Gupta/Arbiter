@@ -33,6 +33,7 @@
 - [x] M5.2 JSONL Dataset Serialization
 - [x] M5.3 Serialization Metadata
 - [x] M5.4 Dataset Manifest Generation
+- [x] M5.5 Serialization Profiles
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

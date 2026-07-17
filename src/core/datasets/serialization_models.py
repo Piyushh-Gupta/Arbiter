@@ -10,7 +10,13 @@ from pydantic import (
     Field,
     JsonValue,
     NonNegativeInt,
+    PrivateAttr,
     model_validator,
+)
+
+from src.core.exceptions import (
+    DuplicateSerializationProfileError,
+    SerializationProfileNotFoundError,
 )
 
 if typing.TYPE_CHECKING:
@@ -149,3 +155,54 @@ class SerializationPipeline(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class SerializationProfile(BaseModel):
+    """Immutable reusable wrapper representing a pre-configured SerializationPipeline."""
+
+    profile_id: str = Field(
+        ..., description="Unique identifier for this serialization profile."
+    )
+    pipeline: SerializationPipeline = Field(
+        ...,
+        description="The strictly immutable serialization pipeline executing this profile.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class SerializationProfileRegistry(BaseModel):
+    """Immutable namespace for securely resolving named serialization profiles."""
+
+    profiles: tuple[SerializationProfile, ...] = Field(
+        ..., description="The collection of registered serialization profiles."
+    )
+
+    _profile_index: Mapping[str, SerializationProfile] = PrivateAttr(
+        default_factory=dict
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_index(self) -> "SerializationProfileRegistry":
+        index = {}
+        for profile in self.profiles:
+            if profile.profile_id in index:
+                raise DuplicateSerializationProfileError(
+                    f"Duplicate serialization profile identifier: {profile.profile_id}"
+                )
+            index[profile.profile_id] = profile
+
+        # Explicit architectural requirement: initialize the private lookup index
+        # using object.__setattr__ to bypass Pydantic's frozen constraint.
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> SerializationProfile:
+        """Resolves a profile by identifier."""
+        if profile_id not in self._profile_index:
+            raise SerializationProfileNotFoundError(
+                f"Serialization profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]
