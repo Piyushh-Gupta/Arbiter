@@ -1,5 +1,8 @@
 """Unit tests for the Dataset Serialization Framework."""
 
+import json
+import tempfile
+from pathlib import Path
 from typing import Iterator
 
 import pytest
@@ -7,7 +10,9 @@ from pydantic import ValidationError
 
 from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.serialization.base import BaseSerializer
+from src.core.datasets.serialization.implementations import JsonlSerializer
 from src.core.datasets.serialization_models import (
+    JsonlSerializationDefinition,
     SerializationDefinition,
     SerializationPipeline,
     SerializationStep,
@@ -196,3 +201,67 @@ def test_serialization_fail_fast() -> None:
         "A:rec2",
         # Error occurs during step2 for rec2, halting execution before step3 ("B") and gen:yield3
     ]
+
+
+def test_jsonl_serializer_compatibility() -> None:
+    """Ensure JsonlSerializer rejects invalid definitions."""
+    serializer = JsonlSerializer()
+
+    with pytest.raises(
+        SerializationConfigurationError,
+        match="JsonlSerializer requires a JsonlSerializationDefinition",
+    ):
+        serializer.validate_compatibility(
+            MockSerializationDefinition(target_name="test")
+        )
+
+
+def test_jsonl_serializer_execution() -> None:
+    """Ensure JsonlSerializer writes valid JSONL output deterministically without buffering."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "output.jsonl"
+
+        definition = JsonlSerializationDefinition(output_path=output_path)
+        serializer = JsonlSerializer()
+
+        step = SerializationStep(definition=definition, strategy=serializer)
+        pipeline = SerializationPipeline(steps=(step,))
+
+        records = [
+            _create_dummy_record("rec1"),
+            _create_dummy_record("rec2"),
+        ]
+
+        orchestrator = DatasetSerializer()
+
+        # Act
+        # Notice we are passing a generator to ensure stream isolation
+        def record_generator() -> Iterator[PreprocessedRecord]:
+            yield from records
+
+        orchestrator.serialize(record_generator(), pipeline)
+
+        # Verify Identity Preservation & Memory (Execution equivalence)
+        # We manually verify by pulling from the serializer stream directly
+        result_stream = serializer.serialize_stream(iter(records), definition)
+        results = list(result_stream)
+        assert len(results) == 2
+        assert id(results[0]) == id(records[0])
+        assert id(results[1]) == id(records[1])
+
+        # Verify File Output
+        assert output_path.exists()
+
+        with open(output_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        assert len(lines) == 2
+
+        # Verify newline delimited and parseable
+        doc1 = json.loads(lines[0])
+        doc2 = json.loads(lines[1])
+
+        assert doc1["text"] == "test_text"
+        # The index we assign in `_create_dummy_record` based on task_id
+        assert doc1["provenance"]["record_index"] == 1
+        assert doc2["provenance"]["record_index"] == 2

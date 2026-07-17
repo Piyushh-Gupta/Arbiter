@@ -30,6 +30,7 @@
 - [x] M4.6 Regex Validation
 - [x] M4.7 Validation Profiles
 - [x] M5.1 Dataset Serialization Framework
+- [x] M5.2 JSONL Dataset Serialization
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.
