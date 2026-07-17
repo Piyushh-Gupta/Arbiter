@@ -84,6 +84,44 @@ class HuggingFaceExportDefinition(ExportDefinition):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class S3StorageClass(str, Enum):
+    """Supported Amazon S3 storage classes."""
+
+    STANDARD = "STANDARD"
+    REDUCED_REDUNDANCY = "REDUCED_REDUNDANCY"
+    STANDARD_IA = "STANDARD_IA"
+    ONEZONE_IA = "ONEZONE_IA"
+    INTELLIGENT_TIERING = "INTELLIGENT_TIERING"
+    GLACIER = "GLACIER"
+    DEEP_ARCHIVE = "DEEP_ARCHIVE"
+    OUTPOSTS = "OUTPOSTS"
+    GLACIER_IR = "GLACIER_IR"
+    SNOW = "SNOW"
+
+
+class S3ExportDefinition(ExportDefinition):
+    """Immutable configuration for Amazon S3 export."""
+
+    bucket_name: str = Field(
+        ...,
+        description="The target Amazon S3 bucket name.",
+    )
+    object_prefix: str = Field(
+        ...,
+        description="The S3 key prefix (e.g., 'datasets/my_export'). Will be treated as a virtual directory.",
+    )
+    region_name: str | None = Field(
+        default=None,
+        description="Optional AWS region. If None, relies on the standard boto3 environment resolution.",
+    )
+    storage_class: S3StorageClass | None = Field(
+        default=None,
+        description="Optional strongly typed S3 storage class. If None, uses bucket default.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 class ExportStep(BaseModel):
     """Immutable bound executable defining one exact export destination."""
 

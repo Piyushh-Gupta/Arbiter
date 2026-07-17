@@ -5,11 +5,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from botocore.exceptions import BotoCoreError
 from huggingface_hub.utils import HfHubHTTPError  # type: ignore[attr-defined]
 from pydantic import ConfigDict, ValidationError
 
 from src.core.datasets.export.base import BaseExporter
-from src.core.datasets.export.implementations import HuggingFaceExporter, LocalExporter
+from src.core.datasets.export.implementations import (
+    HuggingFaceExporter,
+    LocalExporter,
+    S3Exporter,
+)
 from src.core.datasets.export_models import (
     ExportDefinition,
     ExportPipeline,
@@ -17,6 +22,8 @@ from src.core.datasets.export_models import (
     HuggingFaceExportDefinition,
     HuggingFaceRepositoryType,
     LocalExportDefinition,
+    S3ExportDefinition,
+    S3StorageClass,
     SerializedArtifact,
 )
 from src.core.datasets.exporter import DatasetExporter
@@ -450,4 +457,116 @@ def test_huggingface_exporter_http_error_wrapping(mock_hf_api_cls: MagicMock) ->
         definition = HuggingFaceExportDefinition(repository_id="test/repo")
 
         with pytest.raises(ExportExecutionError, match="Hugging Face HTTP error"):
+            exporter.export(artifact, definition)
+
+
+def test_s3_export_definition_immutability() -> None:
+    """Ensure S3ExportDefinition is frozen and enum validation works."""
+    definition = S3ExportDefinition(
+        bucket_name="test-bucket",
+        object_prefix="test/prefix",
+        storage_class=S3StorageClass.STANDARD,
+    )
+    with pytest.raises(ValidationError):
+        definition.bucket_name = "test-mutated"
+
+    with pytest.raises(ValidationError):
+        S3ExportDefinition(
+            bucket_name="test-bucket",
+            object_prefix="test/prefix",
+            storage_class="INVALID_CLASS",  # type: ignore[arg-type]
+        )
+
+
+def test_s3_exporter_compatibility() -> None:
+    """Ensure S3Exporter rejects invalid definitions."""
+    exporter = S3Exporter()
+    definition = MockExportDefinition(target_name="test")
+    with pytest.raises(
+        ExportConfigurationError, match="S3Exporter requires S3ExportDefinition"
+    ):
+        exporter.validate_compatibility(definition)
+
+
+@patch("src.core.datasets.export.implementations.boto3")
+def test_s3_exporter_file_upload(mock_boto3: MagicMock) -> None:
+    """Ensure exact single file upload to S3."""
+    mock_s3_client = mock_boto3.client.return_value
+    exporter = S3Exporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_file = root_path / "source.txt"
+        source_file.write_text("hello world")
+
+        artifact = SerializedArtifact(root_path=source_file)
+        definition = S3ExportDefinition(
+            bucket_name="test-bucket",
+            object_prefix="my/prefix",
+            storage_class=S3StorageClass.STANDARD_IA,
+            region_name="us-east-1",
+        )
+
+        exporter.export(artifact, definition)
+
+        mock_boto3.client.assert_called_once_with("s3", region_name="us-east-1")
+        mock_s3_client.upload_file.assert_called_once_with(
+            Filename=str(source_file),
+            Bucket="test-bucket",
+            Key="my/prefix/source.txt",
+            ExtraArgs={"StorageClass": "STANDARD_IA"},
+        )
+
+
+@patch("src.core.datasets.export.implementations.boto3")
+def test_s3_exporter_dir_upload(mock_boto3: MagicMock) -> None:
+    """Ensure exact directory upload and normalization of keys."""
+    mock_s3_client = mock_boto3.client.return_value
+    exporter = S3Exporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_dir = root_path / "source_dir"
+        source_dir.mkdir()
+        (source_dir / "file1.txt").write_text("data1")
+        nested_dir = source_dir / "nested"
+        nested_dir.mkdir()
+        (nested_dir / "file2.txt").write_text("data2")
+
+        artifact = SerializedArtifact(root_path=source_dir)
+        definition = S3ExportDefinition(
+            bucket_name="test-bucket",
+            object_prefix="my/prefix",
+        )
+
+        exporter.export(artifact, definition)
+
+        assert mock_s3_client.upload_file.call_count == 2
+
+        calls = mock_s3_client.upload_file.call_args_list
+        # Keys should be normalized to / regardless of OS (Windows/Linux)
+        # We can just check the keys exist in the calls
+        keys = [call.kwargs["Key"] for call in calls]
+
+        assert "my/prefix/file1.txt" in keys
+        assert "my/prefix/nested/file2.txt" in keys
+
+
+@patch("src.core.datasets.export.implementations.boto3")
+def test_s3_exporter_botocore_error_wrapping(mock_boto3: MagicMock) -> None:
+    """Ensure BotoCoreError is wrapped."""
+    mock_s3_client = mock_boto3.client.return_value
+    mock_s3_client.upload_file.side_effect = BotoCoreError()
+
+    exporter = S3Exporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_file = root_path / "source.txt"
+        source_file.write_text("test")
+
+        artifact = SerializedArtifact(root_path=source_file)
+        definition = S3ExportDefinition(bucket_name="test-bucket", object_prefix="pre")
+
+        with pytest.raises(ExportExecutionError, match="Amazon S3 export failed"):
             exporter.export(artifact, definition)

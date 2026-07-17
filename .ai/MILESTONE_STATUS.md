@@ -37,6 +37,7 @@
 - [x] M6.1 Dataset Export Framework
 - [x] M6.2 Local Filesystem Export
 - [x] M6.3 Hugging Face Hub Export
+- [x] M6.4 Amazon S3 Export
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

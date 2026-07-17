@@ -2,6 +2,8 @@
 
 import shutil
 
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from huggingface_hub import HfApi
 from huggingface_hub.utils import HfHubHTTPError  # type: ignore[attr-defined]
 
@@ -10,6 +12,7 @@ from src.core.datasets.export_models import (
     ExportDefinition,
     HuggingFaceExportDefinition,
     LocalExportDefinition,
+    S3ExportDefinition,
     SerializedArtifact,
 )
 from src.core.exceptions import ExportConfigurationError, ExportExecutionError
@@ -122,4 +125,63 @@ class HuggingFaceExporter(BaseExporter):
         if not isinstance(definition, HuggingFaceExportDefinition):
             raise ExportConfigurationError(
                 f"HuggingFaceExporter requires HuggingFaceExportDefinition, got {type(definition).__name__}"
+            )
+
+
+class S3Exporter(BaseExporter):
+    """Exports serialized artifacts to Amazon S3."""
+
+    def export(
+        self, artifact: SerializedArtifact, definition: ExportDefinition
+    ) -> None:
+        """Executes the export side-effect securely to Amazon S3."""
+        assert isinstance(definition, S3ExportDefinition)
+
+        try:
+            client_kwargs = {}
+            if definition.region_name:
+                client_kwargs["region_name"] = definition.region_name
+
+            s3_client = boto3.client("s3", **client_kwargs)  # type: ignore[call-overload]
+
+            extra_args = {}
+            if definition.storage_class:
+                extra_args["StorageClass"] = definition.storage_class.value
+
+            if artifact.root_path.is_dir():
+                for file_path in artifact.root_path.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+
+                    # Compute relative path and normalize to /
+                    rel_path = file_path.relative_to(artifact.root_path)
+                    normalized_rel_path = rel_path.as_posix()
+                    s3_key = f"{definition.object_prefix}/{normalized_rel_path}"
+
+                    s3_client.upload_file(
+                        Filename=str(file_path),
+                        Bucket=definition.bucket_name,
+                        Key=s3_key,
+                        ExtraArgs=extra_args if extra_args else None,
+                    )
+            else:
+                # Single file
+                s3_key = f"{definition.object_prefix}/{artifact.root_path.name}"
+                s3_client.upload_file(
+                    Filename=str(artifact.root_path),
+                    Bucket=definition.bucket_name,
+                    Key=s3_key,
+                    ExtraArgs=extra_args if extra_args else None,
+                )
+
+        except (BotoCoreError, ClientError) as e:
+            raise ExportExecutionError(f"Amazon S3 export failed: {e}") from e
+        except Exception as e:
+            raise ExportExecutionError(f"Failed to export to S3: {e}") from e
+
+    def validate_compatibility(self, definition: ExportDefinition) -> None:
+        """Ensures the definition is an S3ExportDefinition."""
+        if not isinstance(definition, S3ExportDefinition):
+            raise ExportConfigurationError(
+                f"S3Exporter requires S3ExportDefinition, got {type(definition).__name__}"
             )
