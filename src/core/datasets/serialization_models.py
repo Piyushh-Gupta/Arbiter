@@ -1,13 +1,28 @@
 import typing
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    NonNegativeInt,
+    model_validator,
+)
 
 if typing.TYPE_CHECKING:
     from src.core.datasets.serialization.base import BaseSerializer
 else:
     BaseSerializer = typing.Any
+
+
+class SerializationFormat(str, Enum):
+    """Strongly typed enumeration of supported serialization formats."""
+
+    JSONL = "jsonl"
 
 
 class SerializationDefinition(BaseModel):
@@ -45,6 +60,60 @@ class MetadataSerializationDefinition(SerializationDefinition):
     encoding: str = Field(
         default="utf-8",
         description="Text encoding for the output metadata file.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class DatasetManifest(BaseModel):
+    """Immutable typed manifest schema describing a serialized dataset."""
+
+    manifest_version: str = Field(
+        default="1.0",
+        description="The schema version of this manifest for forward compatibility.",
+    )
+    serialization_format: SerializationFormat = Field(
+        ...,
+        description="The strongly typed serialization format used.",
+    )
+    dataset_id: str | None = Field(
+        default=None,
+        description="Optional externally supplied dataset identifier.",
+    )
+    dataset_version: str | None = Field(
+        default=None,
+        description="Optional externally supplied dataset version.",
+    )
+    created_at: datetime | None = Field(
+        default=None,
+        description="Optional caller-supplied datetime. Serialized to ISO-8601 via model_dump(mode='json').",
+    )
+    record_count: NonNegativeInt | None = Field(
+        default=None,
+        description="Optional caller-supplied non-negative record count. Rejected at construction if negative.",
+    )
+    extensions: Mapping[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Optional caller-defined provenance extensions. Immutable after model construction.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class ManifestSerializationDefinition(SerializationDefinition):
+    """Immutable configuration for dataset manifest serialization."""
+
+    output_path: Path = Field(
+        ...,
+        description="The absolute or relative destination file path for the manifest JSON.",
+    )
+    manifest: DatasetManifest = Field(
+        ...,
+        description="The immutable typed dataset manifest to persist.",
+    )
+    encoding: str = Field(
+        default="utf-8",
+        description="Text encoding for the output manifest file.",
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)

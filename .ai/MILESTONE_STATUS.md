@@ -32,6 +32,7 @@
 - [x] M5.1 Dataset Serialization Framework
 - [x] M5.2 JSONL Dataset Serialization
 - [x] M5.3 Serialization Metadata
+- [x] M5.4 Dataset Manifest Generation
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

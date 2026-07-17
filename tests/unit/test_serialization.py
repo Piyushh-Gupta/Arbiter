@@ -2,8 +2,9 @@
 
 import json
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 import pytest
 from pydantic import ValidationError
@@ -12,12 +13,16 @@ from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.serialization.base import BaseSerializer
 from src.core.datasets.serialization.implementations import (
     JsonlSerializer,
+    ManifestSerializer,
     MetadataSerializer,
 )
 from src.core.datasets.serialization_models import (
+    DatasetManifest,
     JsonlSerializationDefinition,
+    ManifestSerializationDefinition,
     MetadataSerializationDefinition,
     SerializationDefinition,
+    SerializationFormat,
     SerializationPipeline,
     SerializationStep,
 )
@@ -288,7 +293,6 @@ def test_metadata_serializer_execution() -> None:
     """Ensure MetadataSerializer writes metadata exactly once and preserves identity."""
     with tempfile.TemporaryDirectory() as tmpdir:
         output_path = Path(tmpdir) / "metadata.json"
-        from typing import Any
 
         metadata_map: dict[str, Any] = {
             "dataset": "test",
@@ -357,3 +361,169 @@ def test_metadata_serializer_execution() -> None:
         with open(empty_output_path, "r", encoding="utf-8") as f:
             empty_json = json.load(f)
         assert empty_json == {"empty": True}
+
+
+# ---------------------------------------------------------------------------
+# M5.4 Manifest Serialization tests
+# ---------------------------------------------------------------------------
+
+
+def test_dataset_manifest_immutability() -> None:
+    """Ensure DatasetManifest is frozen."""
+    manifest = DatasetManifest(serialization_format=SerializationFormat.JSONL)
+    with pytest.raises(ValidationError):
+        manifest.manifest_version = "mutated"
+
+
+def test_dataset_manifest_default_version() -> None:
+    """Ensure manifest_version defaults to '1.0'."""
+    manifest = DatasetManifest(serialization_format=SerializationFormat.JSONL)
+    assert manifest.manifest_version == "1.0"
+
+
+def test_dataset_manifest_serialization_format_json_value() -> None:
+    """Ensure serialization_format serializes to its string value, not enum name."""
+    manifest = DatasetManifest(serialization_format=SerializationFormat.JSONL)
+    dumped = manifest.model_dump(mode="json")
+    assert dumped["serialization_format"] == "jsonl"
+
+
+def test_dataset_manifest_optional_fields_accept_none() -> None:
+    """Ensure all optional fields accept None."""
+    manifest = DatasetManifest(
+        serialization_format=SerializationFormat.JSONL,
+        dataset_id=None,
+        dataset_version=None,
+        created_at=None,
+        record_count=None,
+    )
+    assert manifest.dataset_id is None
+    assert manifest.dataset_version is None
+    assert manifest.created_at is None
+    assert manifest.record_count is None
+
+
+def test_dataset_manifest_datetime_serializes_iso8601() -> None:
+    """Ensure created_at datetime serializes to ISO-8601 string via model_dump."""
+    ts = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+    manifest = DatasetManifest(
+        serialization_format=SerializationFormat.JSONL,
+        created_at=ts,
+    )
+    dumped = manifest.model_dump(mode="json")
+    # Pydantic serializes datetime to ISO-8601
+    assert isinstance(dumped["created_at"], str)
+    assert "2024-01-15" in dumped["created_at"]
+
+
+def test_dataset_manifest_record_count_zero_accepted() -> None:
+    """Ensure record_count=0 is accepted."""
+    manifest = DatasetManifest(
+        serialization_format=SerializationFormat.JSONL,
+        record_count=0,
+    )
+    assert manifest.record_count == 0
+
+
+def test_dataset_manifest_negative_record_count_rejected() -> None:
+    """Ensure negative record_count is rejected at construction."""
+    with pytest.raises(ValidationError):
+        DatasetManifest(
+            serialization_format=SerializationFormat.JSONL,
+            record_count=-1,
+        )
+
+
+def test_manifest_serialization_definition_immutability() -> None:
+    """Ensure ManifestSerializationDefinition is frozen."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        definition = ManifestSerializationDefinition(
+            output_path=Path(tmpdir) / "manifest.json",
+            manifest=DatasetManifest(serialization_format=SerializationFormat.JSONL),
+        )
+        with pytest.raises(ValidationError):
+            definition.encoding = "latin-1"
+
+
+def test_manifest_serializer_compatibility() -> None:
+    """Ensure ManifestSerializer rejects incompatible definitions."""
+    serializer = ManifestSerializer()
+    with pytest.raises(
+        SerializationConfigurationError,
+        match="ManifestSerializer requires a ManifestSerializationDefinition",
+    ):
+        serializer.validate_compatibility(
+            MockSerializationDefinition(target_name="test")
+        )
+
+
+def test_manifest_serializer_execution() -> None:
+    """Ensure ManifestSerializer writes manifest exactly once and preserves record identity."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "manifest.json"
+        ts = datetime(2024, 6, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        manifest = DatasetManifest(
+            serialization_format=SerializationFormat.JSONL,
+            dataset_id="my-dataset",
+            dataset_version="2.0",
+            created_at=ts,
+            record_count=2,
+            extensions={"source": "unit-test"},
+        )
+        definition = ManifestSerializationDefinition(
+            output_path=output_path,
+            manifest=manifest,
+        )
+        serializer = ManifestSerializer()
+
+        records = [
+            _create_dummy_record("rec1"),
+            _create_dummy_record("rec2"),
+        ]
+
+        # Verify identity preservation
+        result_stream = serializer.serialize_stream(iter(records), definition)
+        results = list(result_stream)
+        assert len(results) == 2
+        assert id(results[0]) == id(records[0])
+        assert id(results[1]) == id(records[1])
+
+        # Verify file output
+        assert output_path.exists()
+        with open(output_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        written = json.loads(content)
+
+        assert written["manifest_version"] == "1.0"
+        assert written["serialization_format"] == "jsonl"
+        assert written["dataset_id"] == "my-dataset"
+        assert written["dataset_version"] == "2.0"
+        assert written["record_count"] == 2
+        assert written["extensions"] == {"source": "unit-test"}
+        # created_at serialized as ISO-8601 string
+        assert isinstance(written["created_at"], str)
+        assert "2024-06-01" in written["created_at"]
+
+        # Formatting policy: pretty-printed, sorted keys, newline termination
+        assert "\n" in content
+        assert content.endswith("\n")
+
+
+def test_manifest_serializer_empty_stream() -> None:
+    """Ensure ManifestSerializer writes manifest even for an empty stream."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "manifest.json"
+        definition = ManifestSerializationDefinition(
+            output_path=output_path,
+            manifest=DatasetManifest(serialization_format=SerializationFormat.JSONL),
+        )
+        serializer = ManifestSerializer()
+
+        results = list(serializer.serialize_stream(iter([]), definition))
+        assert results == []
+        assert output_path.exists()
+        with open(output_path, "r", encoding="utf-8") as f:
+            written = json.load(f)
+        assert written["manifest_version"] == "1.0"
+        assert written["serialization_format"] == "jsonl"
