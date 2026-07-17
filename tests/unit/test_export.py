@@ -2,16 +2,20 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
+from huggingface_hub.utils import HfHubHTTPError  # type: ignore[attr-defined]
 from pydantic import ConfigDict, ValidationError
 
 from src.core.datasets.export.base import BaseExporter
-from src.core.datasets.export.implementations import LocalExporter
+from src.core.datasets.export.implementations import HuggingFaceExporter, LocalExporter
 from src.core.datasets.export_models import (
     ExportDefinition,
     ExportPipeline,
     ExportStep,
+    HuggingFaceExportDefinition,
+    HuggingFaceRepositoryType,
     LocalExportDefinition,
     SerializedArtifact,
 )
@@ -298,4 +302,152 @@ def test_local_exporter_os_error_wrapping() -> None:
         definition = LocalExportDefinition(destination_root=dest_file)
 
         with pytest.raises(ExportExecutionError, match="Failed to export"):
+            exporter.export(artifact, definition)
+
+
+def test_huggingface_export_definition_immutability() -> None:
+    """Ensure HuggingFaceExportDefinition is frozen and enum validation works."""
+    definition = HuggingFaceExportDefinition(
+        repository_id="test/repo",
+        repository_type=HuggingFaceRepositoryType.DATASET,
+    )
+    with pytest.raises(ValidationError):
+        definition.repository_id = "test/mutated"
+
+    with pytest.raises(ValidationError):
+        HuggingFaceExportDefinition(
+            repository_id="test/repo",
+            repository_type="invalid_type",  # type: ignore[arg-type]
+        )
+
+
+def test_huggingface_exporter_compatibility() -> None:
+    """Ensure HuggingFaceExporter rejects invalid definitions."""
+    exporter = HuggingFaceExporter()
+    definition = MockExportDefinition(target_name="test")
+    with pytest.raises(
+        ExportConfigurationError,
+        match="HuggingFaceExporter requires HuggingFaceExportDefinition",
+    ):
+        exporter.validate_compatibility(definition)
+
+
+@patch("src.core.datasets.export.implementations.HfApi")
+def test_huggingface_exporter_file_upload(mock_hf_api_cls: MagicMock) -> None:
+    """Ensure exact single file upload."""
+    mock_api = mock_hf_api_cls.return_value
+    exporter = HuggingFaceExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_file = root_path / "source.txt"
+        source_file.write_text("hello world")
+
+        artifact = SerializedArtifact(root_path=source_file)
+        definition = HuggingFaceExportDefinition(
+            repository_id="test/repo",
+            create_repo_if_missing=True,
+        )
+
+        exporter.export(artifact, definition)
+
+        mock_api.create_repo.assert_called_once_with(
+            repo_id="test/repo",
+            repo_type="dataset",
+            private=True,
+            exist_ok=True,
+        )
+        mock_api.upload_file.assert_called_once_with(
+            path_or_fileobj=str(source_file),
+            path_in_repo="source.txt",
+            repo_id="test/repo",
+            repo_type="dataset",
+            revision="main",
+            commit_message="Upload dataset via Arbiter Export Subsystem",
+        )
+
+
+@patch("src.core.datasets.export.implementations.HfApi")
+def test_huggingface_exporter_dir_upload(mock_hf_api_cls: MagicMock) -> None:
+    """Ensure exact directory upload."""
+    mock_api = mock_hf_api_cls.return_value
+    exporter = HuggingFaceExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_dir = root_path / "source_dir"
+        source_dir.mkdir()
+
+        artifact = SerializedArtifact(root_path=source_dir)
+        definition = HuggingFaceExportDefinition(
+            repository_id="test/repo",
+            create_repo_if_missing=True,
+        )
+
+        exporter.export(artifact, definition)
+
+        mock_api.create_repo.assert_called_once_with(
+            repo_id="test/repo",
+            repo_type="dataset",
+            private=True,
+            exist_ok=True,
+        )
+        mock_api.upload_folder.assert_called_once_with(
+            folder_path=str(source_dir),
+            repo_id="test/repo",
+            repo_type="dataset",
+            revision="main",
+            commit_message="Upload dataset via Arbiter Export Subsystem",
+        )
+
+
+@patch("src.core.datasets.export.implementations.HfApi")
+def test_huggingface_exporter_repo_missing_error(mock_hf_api_cls: MagicMock) -> None:
+    """Ensure create_repo_if_missing=False checks dataset_info and raises on fail."""
+    mock_api = mock_hf_api_cls.return_value
+    mock_api.dataset_info.side_effect = Exception("Repository Not Found")
+
+    exporter = HuggingFaceExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_dir = root_path / "source_dir"
+        source_dir.mkdir()
+
+        artifact = SerializedArtifact(root_path=source_dir)
+        definition = HuggingFaceExportDefinition(
+            repository_id="test/repo",
+            create_repo_if_missing=False,
+        )
+
+        with pytest.raises(
+            ExportExecutionError, match="Repository test/repo does not exist"
+        ):
+            exporter.export(artifact, definition)
+
+        mock_api.create_repo.assert_not_called()
+        mock_api.upload_folder.assert_not_called()
+
+
+@patch("src.core.datasets.export.implementations.HfApi")
+def test_huggingface_exporter_http_error_wrapping(mock_hf_api_cls: MagicMock) -> None:
+    """Ensure HfHubHTTPError is wrapped."""
+    mock_api = mock_hf_api_cls.return_value
+    response_mock = MagicMock()
+    response_mock.status_code = 500
+    mock_api.upload_folder.side_effect = HfHubHTTPError(
+        "Server error", response=response_mock
+    )
+
+    exporter = HuggingFaceExporter()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_path = Path(tmpdir)
+        source_dir = root_path / "source_dir"
+        source_dir.mkdir()
+
+        artifact = SerializedArtifact(root_path=source_dir)
+        definition = HuggingFaceExportDefinition(repository_id="test/repo")
+
+        with pytest.raises(ExportExecutionError, match="Hugging Face HTTP error"):
             exporter.export(artifact, definition)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing
+from enum import Enum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -39,6 +40,45 @@ class LocalExportDefinition(ExportDefinition):
     overwrite_existing: bool = Field(
         default=False,
         description="If True, permits overwriting an existing destination directory or file.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class HuggingFaceRepositoryType(str, Enum):
+    """Supported Hugging Face Hub repository types."""
+
+    DATASET = "dataset"
+    MODEL = "model"
+    SPACE = "space"
+
+
+class HuggingFaceExportDefinition(ExportDefinition):
+    """Immutable configuration for Hugging Face Hub export."""
+
+    repository_id: str = Field(
+        ...,
+        description="The target Hugging Face repository ID (e.g., 'username/dataset').",
+    )
+    repository_type: HuggingFaceRepositoryType = Field(
+        default=HuggingFaceRepositoryType.DATASET,
+        description="The strongly typed repository type to target.",
+    )
+    revision: str = Field(
+        default="main",
+        description="The target git branch, tag, or commit revision.",
+    )
+    commit_message: str = Field(
+        default="Upload dataset via Arbiter Export Subsystem",
+        description="The commit message to associate with the upload.",
+    )
+    private: bool = Field(
+        default=True,
+        description="If True, the repository will be private if it is created.",
+    )
+    create_repo_if_missing: bool = Field(
+        default=True,
+        description="If True, automatically creates the repository if it does not exist.",
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
