@@ -7,6 +7,7 @@ from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.serialization.base import BaseSerializer
 from src.core.datasets.serialization_models import (
     JsonlSerializationDefinition,
+    MetadataSerializationDefinition,
     SerializationDefinition,
 )
 from src.core.exceptions import SerializationConfigurationError
@@ -41,4 +42,40 @@ class JsonlSerializer(BaseSerializer):
         if not isinstance(definition, JsonlSerializationDefinition):
             raise SerializationConfigurationError(
                 f"JsonlSerializer requires a JsonlSerializationDefinition, got {type(definition).__name__}"
+            )
+
+
+class MetadataSerializer(BaseSerializer):
+    """Deterministically serializes externally supplied dataset metadata without buffering records."""
+
+    def serialize_stream(
+        self,
+        stream: Iterator[PreprocessedRecord],
+        definition: SerializationDefinition,
+    ) -> Iterator[PreprocessedRecord]:
+        # Compatibility is guaranteed by the framework; perform typed cast
+        config = cast(MetadataSerializationDefinition, definition)
+
+        # Write metadata exactly once before the first record is consumed
+        # Intentional Formatting Policy: Pretty-printed human-readable JSON
+        with config.output_path.open(
+            mode="w", encoding=config.encoding, newline="\n"
+        ) as f:
+            json_string = json.dumps(
+                config.metadata,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            f.write(f"{json_string}\n")
+
+        # Stream propagation cleanly efficiently natively
+        for record in stream:
+            # Strict object identity preservation
+            yield record
+
+    def validate_compatibility(self, definition: SerializationDefinition) -> None:
+        if not isinstance(definition, MetadataSerializationDefinition):
+            raise SerializationConfigurationError(
+                f"MetadataSerializer requires a MetadataSerializationDefinition, got {type(definition).__name__}"
             )

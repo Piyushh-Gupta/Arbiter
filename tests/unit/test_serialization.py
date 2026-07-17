@@ -10,9 +10,13 @@ from pydantic import ValidationError
 
 from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.serialization.base import BaseSerializer
-from src.core.datasets.serialization.implementations import JsonlSerializer
+from src.core.datasets.serialization.implementations import (
+    JsonlSerializer,
+    MetadataSerializer,
+)
 from src.core.datasets.serialization_models import (
     JsonlSerializationDefinition,
+    MetadataSerializationDefinition,
     SerializationDefinition,
     SerializationPipeline,
     SerializationStep,
@@ -265,3 +269,91 @@ def test_jsonl_serializer_execution() -> None:
         # The index we assign in `_create_dummy_record` based on task_id
         assert doc1["provenance"]["record_index"] == 1
         assert doc2["provenance"]["record_index"] == 2
+
+
+def test_metadata_serializer_compatibility() -> None:
+    """Ensure MetadataSerializer rejects invalid definitions."""
+    serializer = MetadataSerializer()
+
+    with pytest.raises(
+        SerializationConfigurationError,
+        match="MetadataSerializer requires a MetadataSerializationDefinition",
+    ):
+        serializer.validate_compatibility(
+            MockSerializationDefinition(target_name="test")
+        )
+
+
+def test_metadata_serializer_execution() -> None:
+    """Ensure MetadataSerializer writes metadata exactly once and preserves identity."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "metadata.json"
+        from typing import Any
+
+        metadata_map: dict[str, Any] = {
+            "dataset": "test",
+            "version": "1.0",
+            "stats": {"count": 2},
+        }
+
+        definition = MetadataSerializationDefinition(
+            output_path=output_path, metadata=metadata_map
+        )
+        serializer = MetadataSerializer()
+
+        step = SerializationStep(definition=definition, strategy=serializer)
+        pipeline = SerializationPipeline(steps=(step,))
+
+        records = [
+            _create_dummy_record("rec1"),
+            _create_dummy_record("rec2"),
+        ]
+
+        orchestrator = DatasetSerializer()
+
+        def record_generator() -> Iterator[PreprocessedRecord]:
+            yield from records
+
+        orchestrator.serialize(record_generator(), pipeline)
+
+        # Verify Identity Preservation & Memory (Execution equivalence)
+        result_stream = serializer.serialize_stream(iter(records), definition)
+        results = list(result_stream)
+        assert len(results) == 2
+        assert id(results[0]) == id(records[0])
+        assert id(results[1]) == id(records[1])
+
+        # Verify File Output
+        assert output_path.exists()
+
+        with open(output_path, "r", encoding="utf-8") as f:
+            written_json = json.load(f)
+
+        assert written_json == metadata_map
+
+        # Verify formatting policy (indentation and newline termination)
+        with open(output_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Should be pretty printed (contains newlines inside json)
+        assert "\n" in content
+        # Ensure proper newline at the end
+        assert content.endswith("\n")
+
+        # Ensure it works for an empty stream without failing to write the metadata
+        empty_output_path = Path(tmpdir) / "empty_metadata.json"
+        empty_metadata_map: dict[str, Any] = {"empty": True}
+        empty_definition = MetadataSerializationDefinition(
+            output_path=empty_output_path, metadata=empty_metadata_map
+        )
+        empty_serializer = MetadataSerializer()
+        empty_stream = empty_serializer.serialize_stream(iter([]), empty_definition)
+
+        # Eagerly writing? We need to pull the first item or let it finish
+        # Actually in python a generator doesn't execute anything until `next()` is called or iterated.
+        # So we MUST iterate it.
+        list(empty_stream)
+        assert empty_output_path.exists()
+        with open(empty_output_path, "r", encoding="utf-8") as f:
+            empty_json = json.load(f)
+        assert empty_json == {"empty": True}

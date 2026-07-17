@@ -31,6 +31,7 @@
 - [x] M4.7 Validation Profiles
 - [x] M5.1 Dataset Serialization Framework
 - [x] M5.2 JSONL Dataset Serialization
+- [x] M5.3 Serialization Metadata
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

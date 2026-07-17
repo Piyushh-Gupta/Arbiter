@@ -1,9 +1,8 @@
-"""Immutable configuration models for the serialization framework."""
-
 import typing
 from pathlib import Path
+from typing import Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 if typing.TYPE_CHECKING:
     from src.core.datasets.serialization.base import BaseSerializer
@@ -27,6 +26,25 @@ class JsonlSerializationDefinition(SerializationDefinition):
     encoding: str = Field(
         default="utf-8",
         description="Text encoding for the output file.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class MetadataSerializationDefinition(SerializationDefinition):
+    """Immutable configuration for dataset metadata serialization."""
+
+    output_path: Path = Field(
+        ...,
+        description="The absolute or relative destination file path for the metadata JSON.",
+    )
+    metadata: Mapping[str, JsonValue] = Field(
+        ...,
+        description="The immutable dataset-level deterministic descriptive metadata to persist.",
+    )
+    encoding: str = Field(
+        default="utf-8",
+        description="Text encoding for the output metadata file.",
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
