@@ -34,6 +34,7 @@
 - [x] M5.3 Serialization Metadata
 - [x] M5.4 Dataset Manifest Generation
 - [x] M5.5 Serialization Profiles
+- [x] M6.1 Dataset Export Framework
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.

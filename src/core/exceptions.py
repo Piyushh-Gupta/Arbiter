@@ -233,3 +233,15 @@ class SerializationProfileNotFoundError(Exception):
     """Raised when a requested SerializationProfile cannot be resolved."""
 
     pass
+
+
+class ExportConfigurationError(Exception):
+    """Raised when an export definition and strategy are incompatible."""
+
+    pass
+
+
+class ExportExecutionError(Exception):
+    """Raised when the export pipeline encounters an unexpected failure."""
+
+    pass
