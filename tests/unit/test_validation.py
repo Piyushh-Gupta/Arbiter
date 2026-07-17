@@ -17,11 +17,13 @@ from src.core.datasets.selectors import SimpleFieldSelector
 from src.core.datasets.validation.base import BaseValidator
 from src.core.datasets.validation.implementations import (
     EmptyTextValidator,
+    LabelValidator,
     LengthValidator,
     RequiredFieldValidator,
 )
 from src.core.datasets.validation_models import (
     EmptyTextValidationDefinition,
+    LabelValidationDefinition,
     LengthValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
@@ -562,4 +564,97 @@ def test_length_validation_compatibility() -> None:
         ValidationStep(
             definition=MockValidationDefinition(field_name="text"),
             strategy=LengthValidator(),
+        )
+
+
+def test_label_validation_config_errors() -> None:
+    """Ensure LabelValidationDefinition enforces config correctly."""
+    # Empty allowed label set
+    with pytest.raises(ValidationError):
+        LabelValidationDefinition(
+            selectors=(SimpleFieldSelector(field_name="label"),),
+            allowed_labels=frozenset(),
+        )
+
+
+def test_label_validation_success() -> None:
+    """Ensure label validation evaluates exact membership correctly."""
+    records = [
+        _create_dummy_record("positive"),
+        _create_dummy_record("negative"),
+        _create_dummy_record("neutral"),
+    ]
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=LabelValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    allowed_labels=frozenset(["positive", "negative", "neutral"]),
+                ),
+                strategy=LabelValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+    stream = validator.validate(iter(records), pipeline)
+
+    # Pass exactly
+    results = list(stream)
+    assert len(results) == 3
+
+
+def test_label_validation_failure() -> None:
+    """Ensure invalid labels throw DatasetValidationError cleanly."""
+    pipeline = ValidationPipeline(
+        steps=(
+            ValidationStep(
+                definition=LabelValidationDefinition(
+                    selectors=(SimpleFieldSelector(field_name="text"),),
+                    allowed_labels=frozenset(["positive", "negative"]),
+                ),
+                strategy=LabelValidator(),
+            ),
+        )
+    )
+    validator = DatasetValidator()
+
+    bad_texts = [
+        "unknown",
+        "Positive",  # Case sensitive
+        "",  # Empty string
+        " ",  # Whitespace
+    ]
+
+    for text in bad_texts:
+        bad_record = _create_dummy_record(text)
+        stream = validator.validate(iter([bad_record]), pipeline)
+        with pytest.raises(
+            DatasetValidationError, match="is not in allowed labels set"
+        ):
+            list(stream)
+
+
+def test_label_validation_propagates_field_resolution_error() -> None:
+    """Ensure structural schema mismatches cleanly propagate FieldResolutionError untouched."""
+    record = _create_dummy_record("positive")
+
+    definition = LabelValidationDefinition(
+        selectors=(SimpleFieldSelector(field_name="missing_field"),),
+        allowed_labels=frozenset(["positive"]),
+    )
+    strategy = LabelValidator()
+    stream = strategy.validate_stream(iter([record]), definition)
+
+    with pytest.raises(FieldResolutionError, match="not found on record"):
+        list(stream)
+
+
+def test_label_validation_compatibility() -> None:
+    """Ensure LabelValidator exactly requires its exact definition."""
+    with pytest.raises(
+        ValidationConfigurationError, match="requires a LabelValidationDefinition"
+    ):
+        ValidationStep(
+            definition=MockValidationDefinition(field_name="text"),
+            strategy=LabelValidator(),
         )

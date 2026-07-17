@@ -6,6 +6,7 @@ from src.core.datasets.preprocessing_models import PreprocessedRecord
 from src.core.datasets.validation.base import BaseValidator
 from src.core.datasets.validation_models import (
     EmptyTextValidationDefinition,
+    LabelValidationDefinition,
     LengthValidationDefinition,
     RequiredFieldValidationDefinition,
     ValidationDefinition,
@@ -137,4 +138,41 @@ class LengthValidator(BaseValidator):
         if not isinstance(definition, LengthValidationDefinition):
             raise ValidationConfigurationError(
                 "LengthValidator requires a LengthValidationDefinition."
+            )
+
+
+class LabelValidator(BaseValidator):
+    """Stateless validator verifying that label fields belong to an allowed set."""
+
+    def validate_stream(
+        self,
+        stream: Iterator[PreprocessedRecord],
+        definition: ValidationDefinition,
+    ) -> Iterator[PreprocessedRecord]:
+        """
+        Validates records ensuring configured label fields belong to the allowed set.
+
+        Propagates FieldResolutionError unchanged for structural schema mismatch.
+        Raises DatasetValidationError strictly on encountering unknown labels.
+        Preserves object identity identically through the pipeline natively.
+        """
+        assert isinstance(definition, LabelValidationDefinition)
+
+        for preprocessed_record in stream:
+            for selector in definition.selectors:
+                value = selector.resolve(preprocessed_record.record)
+
+                if value not in definition.allowed_labels:
+                    raise DatasetValidationError(
+                        f"Validation failed: Label '{value}' is not in allowed labels set via {selector}"
+                    )
+
+            # Preserve identical underlying immutable object exactly passing it downward
+            yield preprocessed_record
+
+    def validate_compatibility(self, definition: ValidationDefinition) -> None:
+        """Enforces strictly bound execution parameters at model construction statically."""
+        if not isinstance(definition, LabelValidationDefinition):
+            raise ValidationConfigurationError(
+                "LabelValidator requires a LabelValidationDefinition."
             )

@@ -130,6 +130,22 @@ class LengthValidationDefinition(ValidationDefinition):
         return self
 
 
+class LabelValidationDefinition(ValidationDefinition):
+    """Configuration describing required label validation constraints."""
+
+    selectors: tuple[FieldSelector, ...] = Field(
+        ...,
+        description="Fields that must belong to the allowed labels set.",
+        min_length=1,
+    )
+
+    allowed_labels: frozenset[str] = Field(
+        ..., description="Immutable collection of valid labels.", min_length=1
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 if typing.TYPE_CHECKING:
     from src.core.datasets.validation.base import BaseValidator
 else:
