@@ -209,3 +209,15 @@ class ValidationExecutionError(Exception):
     """Raised when the validation pipeline encounters an unexpected failure."""
 
     pass
+
+
+class SerializationConfigurationError(Exception):
+    """Raised when a serialization definition and strategy are incompatible."""
+
+    pass
+
+
+class SerializationExecutionError(Exception):
+    """Raised when the serialization pipeline encounters an unexpected failure."""
+
+    pass

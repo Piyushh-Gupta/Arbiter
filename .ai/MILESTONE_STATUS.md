@@ -29,6 +29,7 @@
 - [x] M4.5 Label Validation
 - [x] M4.6 Regex Validation
 - [x] M4.7 Validation Profiles
+- [x] M5.1 Dataset Serialization Framework
 
 ## In Progress
 - [ ] TBD: Awaiting next implementation phase.
