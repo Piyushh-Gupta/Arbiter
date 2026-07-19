@@ -1,0 +1,72 @@
+"""Immutable domain models for the Evidence Retrieval subsystem."""
+
+from typing import Mapping
+
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
+
+
+class RetrievalDefinition(BaseModel):
+    """Base immutable configuration for a retrieval strategy."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class RetrievalMetadata(BaseModel):
+    """Minimal immutable execution provenance attached to each EvidenceBundle."""
+
+    strategy_id: str = Field(
+        ...,
+        description="Identifies which retriever produced this bundle (e.g. 'bm25', 'faiss', 'hybrid').",
+    )
+    top_k: int = Field(
+        ...,
+        description="Number of passages requested during retrieval.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class EvidencePassage(BaseModel):
+    """Immutable representation of a single retrieved evidence unit."""
+
+    document_id: str = Field(
+        ...,
+        description="Stable identifier for the source document (e.g. Wikipedia article title).",
+    )
+    span_id: str = Field(
+        ...,
+        description="Identifier for the specific chunk or span within the document.",
+    )
+    text: str = Field(
+        ...,
+        description="Raw passage text.",
+    )
+    score: float = Field(
+        ...,
+        description="Relevance score assigned by the retrieval strategy.",
+    )
+    metadata: Mapping[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Optional corpus-specific metadata (extensible, JSON-compatible).",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class EvidenceBundle(BaseModel):
+    """Immutable, ordered collection of retrieved passages for a single claim invocation."""
+
+    claim: str = Field(
+        ...,
+        description="The normalized, verified textual assertion.",
+    )
+    passages: tuple[EvidencePassage, ...] = Field(
+        ...,
+        description="Ordered sequence of retrieved passages by descending relevance score.",
+    )
+    metadata: RetrievalMetadata = Field(
+        ...,
+        description="Minimal execution provenance for downstream observability.",
+    )
+
+    model_config = ConfigDict(frozen=True)

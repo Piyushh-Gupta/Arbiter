@@ -273,3 +273,19 @@ class DuplicateLoadingProfileError(ArbiterError):
 
 class LoadingProfileNotFoundError(ArbiterError):
     """Raised when a loading profile cannot be resolved from the registry."""
+
+
+class RetrievalConfigurationError(ArbiterError):
+    """Raised when a retrieval strategy receives an incompatible or malformed definition."""
+
+
+class RetrievalExecutionError(ArbiterError):
+    """Raised when a retrieval strategy encounters a runtime failure."""
+
+
+class DuplicateRetrievalProfileError(ArbiterError):
+    """Raised when a RetrievalProfileRegistry encounters a duplicate profile_id."""
+
+
+class RetrievalProfileNotFoundError(ArbiterError):
+    """Raised when a retrieval profile cannot be resolved from the registry."""
