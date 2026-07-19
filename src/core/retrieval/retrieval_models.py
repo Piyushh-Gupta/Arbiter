@@ -11,6 +11,41 @@ class RetrievalDefinition(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class CorpusEntry(BaseModel):
+    """A minimal immutable value object representing a single indexed corpus passage."""
+
+    document_id: str = Field(
+        ...,
+        description="Stable identifier for the source document (e.g. Wikipedia article title).",
+    )
+    span_id: str = Field(
+        ...,
+        description="Identifier for the specific chunk or span within the document.",
+    )
+    text: str = Field(
+        ...,
+        description="Raw passage text.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class BM25RetrievalDefinition(RetrievalDefinition):
+    """Immutable configuration for a BM25 retrieval invocation."""
+
+    top_k: int = Field(
+        ...,
+        gt=0,
+        description="Maximum number of passages to return.",
+    )
+    score_threshold: float | None = Field(
+        default=None,
+        description="Optional minimum BM25 score filter.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 class RetrievalMetadata(BaseModel):
     """Minimal immutable execution provenance attached to each EvidenceBundle."""
 

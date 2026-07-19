@@ -1,12 +1,17 @@
 """Unit tests for the Evidence Retrieval subsystem framework."""
 
+from collections.abc import Callable
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
+from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionError
 from src.core.retrieval.base import BaseRetriever
 from src.core.retrieval.retrieval_models import (
+    BM25RetrievalDefinition,
+    CorpusEntry,
     EvidenceBundle,
     EvidencePassage,
     RetrievalDefinition,
@@ -181,3 +186,329 @@ def test_claim_retriever_returns_exact_bundle_identity(
     result = retriever.retrieve("claim", dummy_definition, mock_strategy)
 
     assert result is dummy_bundle
+
+
+@pytest.fixture
+def dummy_corpus() -> tuple[CorpusEntry, ...]:
+    return (
+        CorpusEntry(document_id="doc1", span_id="1", text="the quick brown fox"),
+        CorpusEntry(document_id="doc2", span_id="1", text="jumps over the lazy dog"),
+        CorpusEntry(document_id="doc3", span_id="1", text="the quick brown dog"),
+        CorpusEntry(document_id="doc4", span_id="1", text="foxes are fast"),
+        CorpusEntry(document_id="doc5", span_id="1", text="lazy dogs are slow"),
+    )
+
+
+@pytest.fixture
+def dummy_tokenizer() -> Callable[[str], list[str]]:
+    return lambda text: text.lower().split()
+
+
+@pytest.fixture
+def bm25_index(
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> BM25Okapi:
+    tokenized_corpus = [dummy_tokenizer(entry.text) for entry in dummy_corpus]
+    return BM25Okapi(tokenized_corpus)
+
+
+def test_corpus_entry_is_in_retrieval_models() -> None:
+    """Verify CorpusEntry is importable from retrieval_models, not a BM25-specific module."""
+    from src.core.retrieval.retrieval_models import CorpusEntry as CE
+
+    assert CE is CorpusEntry
+
+
+def test_corpus_entry_immutability() -> None:
+    """Verify CorpusEntry is immutable."""
+    entry = CorpusEntry(document_id="d1", span_id="s1", text="txt")
+    with pytest.raises(Exception):
+        entry.text = "mutated"
+
+
+def test_bm25_retrieval_definition_immutability() -> None:
+    """Test that BM25RetrievalDefinition is strictly immutable."""
+    definition = BM25RetrievalDefinition(top_k=5)
+    with pytest.raises(Exception):
+        definition.top_k = 10
+
+
+def test_bm25_retrieval_definition_requires_positive_top_k() -> None:
+    """Verify top_k < 1 is rejected at construction."""
+    with pytest.raises(Exception):
+        BM25RetrievalDefinition(top_k=0)
+
+
+def test_bm25_retrieval_definition_optional_threshold() -> None:
+    """Verify score_threshold=None is valid."""
+    definition = BM25RetrievalDefinition(top_k=5, score_threshold=None)
+    assert definition.score_threshold is None
+
+
+def test_bm25_retriever_satisfies_base_retriever_protocol(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify isinstance(BM25Retriever(...), BaseRetriever)."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    assert isinstance(retriever, BaseRetriever)
+
+
+def test_bm25_retriever_accepts_bm25_definition(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify validate_compatibility succeeds on valid definition."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=3)
+    retriever.validate_compatibility(definition)
+
+
+def test_bm25_retriever_rejects_base_definition(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify RetrievalConfigurationError on wrong definition type."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = RetrievalDefinition()
+    with pytest.raises(RetrievalConfigurationError):
+        retriever.validate_compatibility(definition)
+
+
+def test_bm25_retriever_returns_top_k_passages(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify exact count returned for a 5-entry corpus."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=2)
+    bundle = retriever.retrieve("quick brown fox", definition)
+    assert len(bundle.passages) == 2
+
+
+def test_bm25_retriever_descending_score_order(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify passages are sorted by descending score."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=5)
+    bundle = retriever.retrieve("quick brown fox", definition)
+
+    scores = [p.score for p in bundle.passages]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_bm25_retriever_score_threshold_filters_low_scores(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify passages below threshold are excluded."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+
+    # First, get the scores without threshold
+    unfiltered_bundle = retriever.retrieve("quick", BM25RetrievalDefinition(top_k=5))
+    assert len(unfiltered_bundle.passages) > 0
+    min_unfiltered_score = min([p.score for p in unfiltered_bundle.passages])
+
+    # Now set threshold above the minimum
+    threshold = min_unfiltered_score + 0.1
+    definition = BM25RetrievalDefinition(top_k=5, score_threshold=threshold)
+    filtered_bundle = retriever.retrieve("quick", definition)
+
+    assert len(filtered_bundle.passages) < len(unfiltered_bundle.passages)
+    assert all(p.score >= threshold for p in filtered_bundle.passages)
+
+
+def test_bm25_retriever_score_threshold_none_returns_all(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify None threshold disables filtering."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=5, score_threshold=None)
+    bundle = retriever.retrieve("quick", definition)
+    assert len(bundle.passages) == 5  # Top k capped by corpus size
+
+
+def test_bm25_retriever_identity(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify document_id/span_id match corpus entry for top result."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=1)
+    # The claim exactly matches doc1 (id: doc1)
+    bundle = retriever.retrieve("the quick brown fox", definition)
+    assert bundle.passages[0].document_id == "doc1"
+    assert bundle.passages[0].span_id == "1"
+    assert bundle.passages[0].text == "the quick brown fox"
+
+
+def test_bm25_retriever_returns_evidence_bundle(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify return type is EvidenceBundle."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=1)
+    bundle = retriever.retrieve("fox", definition)
+    assert isinstance(bundle, EvidenceBundle)
+
+
+def test_bm25_retriever_metadata_strategy_id(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify metadata.strategy_id == 'bm25'."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=1)
+    bundle = retriever.retrieve("fox", definition)
+    assert bundle.metadata.strategy_id == "bm25"
+
+
+def test_bm25_retriever_metadata_top_k(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify metadata.top_k == definition.top_k."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=3)
+    bundle = retriever.retrieve("fox", definition)
+    assert bundle.metadata.top_k == 3
+
+
+def test_bm25_retriever_determinism(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Verify identical claims produce identical bundles."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=3)
+
+    bundle1 = retriever.retrieve("quick brown dog", definition)
+    bundle2 = retriever.retrieve("quick brown dog", definition)
+
+    assert bundle1 == bundle2
+
+
+def test_bm25_retriever_empty_corpus_returns_empty_bundle(
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Empty corpus should return empty bundle without error."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    mock_index = MagicMock()
+    mock_index.get_scores.return_value = np.array([])
+
+    retriever = BM25Retriever(mock_index, (), dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=3)
+    bundle = retriever.retrieve("fox", definition)
+    assert len(bundle.passages) == 0
+
+
+def test_bm25_retriever_propagates_execution_error(
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_tokenizer: Callable[[str], list[str]],
+) -> None:
+    """Mock get_scores to raise; verify RetrievalExecutionError."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    class FaultyIndex(BM25Okapi):  # type: ignore[misc]
+        def __init__(self) -> None:
+            pass
+
+        def get_scores(self, query: list[str]) -> list[float]:
+            raise ValueError("Simulated fault")
+
+    retriever = BM25Retriever(FaultyIndex(), dummy_corpus, dummy_tokenizer)
+    definition = BM25RetrievalDefinition(top_k=3)
+
+    with pytest.raises(
+        RetrievalExecutionError, match="BM25 retrieval execution failed"
+    ):
+        retriever.retrieve("fox", definition)
+
+
+def test_bm25_retriever_tokenizer_injection(
+    bm25_index: BM25Okapi,
+    dummy_corpus: tuple[CorpusEntry, ...],
+) -> None:
+    """Verify the injected tokenizer is called with the claim string during retrieval."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    mock_tokenizer = MagicMock(return_value=["mocked"])
+    retriever = BM25Retriever(bm25_index, dummy_corpus, mock_tokenizer)
+
+    definition = BM25RetrievalDefinition(top_k=1)
+    retriever.retrieve("fox", definition)
+
+    mock_tokenizer.assert_called_once_with("fox")
+
+
+def test_bm25_retriever_tokenizer_consistency(
+    dummy_corpus: tuple[CorpusEntry, ...],
+) -> None:
+    """Verify that a custom tokenizer produces different top results than a whitespace tokenizer."""
+    from src.core.retrieval.implementations import BM25Retriever
+
+    def whitespace_tokenizer(text: str) -> list[str]:
+        return text.lower().split()
+
+    # A dummy tokenizer that only ever extracts the word "dog", ignoring other words
+    def dog_tokenizer(text: str) -> list[str]:
+        return ["dog"] if "dog" in text.lower() else []
+
+    whitespace_index = BM25Okapi([whitespace_tokenizer(e.text) for e in dummy_corpus])
+    dog_index = BM25Okapi([dog_tokenizer(e.text) for e in dummy_corpus])
+
+    retriever_whitespace = BM25Retriever(
+        whitespace_index, dummy_corpus, whitespace_tokenizer
+    )
+    retriever_dog = BM25Retriever(dog_index, dummy_corpus, dog_tokenizer)
+
+    definition = BM25RetrievalDefinition(top_k=1)
+
+    # "lazy" query
+    bundle1 = retriever_whitespace.retrieve("lazy", definition)
+    # The dog tokenizer ignores "lazy", so it returns no matching scores, returning the first corpus entry by default stable sort
+    bundle2 = retriever_dog.retrieve("lazy", definition)
+
+    assert bundle1.passages[0].text != bundle2.passages[0].text
