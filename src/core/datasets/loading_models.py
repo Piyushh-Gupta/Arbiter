@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.datasets.mapping_models import TaskRecord
 from src.core.datasets.serialization_models import DatasetManifest
@@ -10,6 +10,17 @@ from src.core.datasets.serialization_models import DatasetManifest
 
 class LoadingDefinition(BaseModel):
     """Base immutable configuration for a dataset loading target."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class JsonlLoadingDefinition(LoadingDefinition):
+    """Immutable configuration targeting a serialized JSONL dataset artifact."""
+
+    encoding: str = Field(
+        default="utf-8",
+        description="The text encoding of the target JSONL file.",
+    )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 

@@ -41,7 +41,8 @@
 - [x] M6.5 Export Profiles
 
 ## In Progress
-- [ ] TBD: Awaiting next implementation phase.
+- [x] M7.1 Dataset Loading Framework
+- [x] M7.2 JSONL Dataset Loader
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
