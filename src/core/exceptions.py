@@ -257,3 +257,15 @@ class ExportProfileNotFoundError(ArbiterError):
     """Raised when an export profile identifier cannot be resolved."""
 
     pass
+
+
+class LoadingConfigurationError(ArbiterError):
+    """Raised when a loading definition and strategy are incompatible."""
+
+    pass
+
+
+class LoadingExecutionError(ArbiterError):
+    """Raised when the loading subsystem encounters a reconstruction or IO failure."""
+
+    pass

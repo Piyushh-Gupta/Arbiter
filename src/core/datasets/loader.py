@@ -4,7 +4,10 @@ import structlog
 
 from src.core.datasets.artifact_manager import ArtifactManager
 from src.core.datasets.artifact_models import ArtifactIdentity, ArtifactLifecycleState
+from src.core.datasets.export_models import SerializedArtifact
 from src.core.datasets.loader_models import ArtifactHandle
+from src.core.datasets.loading.base import BaseLoader
+from src.core.datasets.loading_models import ArbiterDataset, LoadingDefinition
 from src.core.datasets.manifest_models import ArtifactInventoryEntry
 from src.core.exceptions import (
     ArtifactNotFoundError,
@@ -106,3 +109,20 @@ class DatasetLoader:
         )
 
         return ArtifactHandle(stream=stream, identity=identity, entry=entry)
+
+    def load(
+        self,
+        artifact: SerializedArtifact,
+        definition: LoadingDefinition,
+        strategy: BaseLoader,
+    ) -> ArbiterDataset:
+        """
+        Orchestrates the execution of a single loading strategy.
+
+        Execution Semantics:
+        1. Invokes strategy.validate_compatibility(definition) to fail-fast.
+        2. Injects the SerializedArtifact and LoadingDefinition into strategy.load().
+        3. Returns the exact ArbiterDataset produced by the strategy without modification.
+        """
+        strategy.validate_compatibility(definition)
+        return strategy.load(artifact, definition)
