@@ -3,17 +3,19 @@
 from collections.abc import Callable
 from unittest.mock import MagicMock
 
+import faiss
 import numpy as np
 import pytest
 from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionError
-from src.core.retrieval.base import BaseRetriever
+from src.core.retrieval.base import BaseRetriever, QueryEncoder
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
     CorpusEntry,
     EvidenceBundle,
     EvidencePassage,
+    FAISSRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
 )
@@ -512,3 +514,338 @@ def test_bm25_retriever_tokenizer_consistency(
     bundle2 = retriever_dog.retrieve("lazy", definition)
 
     assert bundle1.passages[0].text != bundle2.passages[0].text
+
+
+# ==============================================================================
+# FAISS Retrieval Tests
+# ==============================================================================
+
+
+@pytest.fixture
+def dummy_encoder() -> QueryEncoder:
+    """A mock QueryEncoder that returns fixed deterministic vectors."""
+
+    class MockEncoder:
+        def encode(self, text: str) -> np.ndarray:
+            # Deterministic mapping for tests based on text length
+            val = float(len(text))
+            # Return normalized 2D vector for 2-dim index
+            vec = np.array([val, val + 1.0], dtype=np.float32)
+            faiss.normalize_L2(vec.reshape(1, -1))
+            return vec
+
+    return MockEncoder()
+
+
+@pytest.fixture
+def dummy_faiss_index() -> faiss.Index:
+    """A 2-dimensional IndexFlatIP populated with vectors corresponding to dummy_corpus."""
+    index = faiss.IndexFlatIP(2)
+    # 5 items in dummy_corpus
+    vectors = []
+    for i in range(5):
+        val = float(i)
+        vec = np.array([val, val + 1.0], dtype=np.float32)
+        vectors.append(vec)
+
+    matrix = np.vstack(vectors)
+    faiss.normalize_L2(matrix)
+    index.add(matrix)
+    return index
+
+
+def test_query_encoder_protocol_is_in_base() -> None:
+    """Verify QueryEncoder is importable from base."""
+    from src.core.retrieval.base import QueryEncoder as QE
+
+    assert QE is QueryEncoder
+
+
+def test_faiss_retriever_satisfies_base_retriever_protocol(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify isinstance(FAISSRetriever(...), BaseRetriever)."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    assert isinstance(retriever, BaseRetriever)
+
+
+def test_faiss_retrieval_definition_immutability() -> None:
+    """Test that FAISSRetrievalDefinition is strictly immutable."""
+    definition = FAISSRetrievalDefinition(top_k=5)
+    with pytest.raises(Exception):
+        definition.top_k = 10
+
+
+def test_faiss_retrieval_definition_requires_positive_top_k() -> None:
+    """Verify top_k < 1 is rejected at construction."""
+    with pytest.raises(Exception):
+        FAISSRetrievalDefinition(top_k=0)
+
+
+def test_faiss_retrieval_definition_optional_similarity_threshold() -> None:
+    """Verify similarity_threshold=None is valid."""
+    definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=None)
+    assert definition.similarity_threshold is None
+
+
+def test_faiss_retriever_accepts_faiss_definition(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify validate_compatibility succeeds on valid definition."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=3)
+    retriever.validate_compatibility(definition)
+
+
+def test_faiss_retriever_rejects_base_definition(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify RetrievalConfigurationError on wrong definition type."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = RetrievalDefinition()
+    with pytest.raises(RetrievalConfigurationError):
+        retriever.validate_compatibility(definition)
+
+
+def test_faiss_retriever_rejects_bm25_definition(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify RetrievalConfigurationError on BM25 definition."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = BM25RetrievalDefinition(top_k=3)
+    with pytest.raises(RetrievalConfigurationError):
+        retriever.validate_compatibility(definition)
+
+
+def test_faiss_retriever_returns_top_k_passages(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify exact count returned."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=2)
+    bundle = retriever.retrieve("claim", definition)
+    assert len(bundle.passages) == 2
+
+
+def test_faiss_retriever_descending_score_order(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify passages are sorted by descending score."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=5)
+    bundle = retriever.retrieve("claim", definition)
+
+    scores = [p.score for p in bundle.passages]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_faiss_retriever_similarity_threshold_filters_low_scores(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify passages below threshold are excluded."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+
+    unfiltered_bundle = retriever.retrieve("claim", FAISSRetrievalDefinition(top_k=5))
+    min_unfiltered_score = min([p.score for p in unfiltered_bundle.passages])
+
+    threshold = min_unfiltered_score + 0.0001
+    definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=threshold)
+    filtered_bundle = retriever.retrieve("claim", definition)
+
+    assert len(filtered_bundle.passages) < len(unfiltered_bundle.passages)
+    assert all(p.score >= threshold for p in filtered_bundle.passages)
+
+
+def test_faiss_retriever_similarity_threshold_none_returns_all(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify None threshold disables filtering."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=None)
+    bundle = retriever.retrieve("claim", definition)
+    assert len(bundle.passages) == 5
+
+
+def test_faiss_retriever_identity(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify document_id/span_id match corpus entry for top result."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=1)
+
+    bundle = retriever.retrieve("claim", definition)
+
+    # Manually find which corpus entry got that score to verify identity
+    # Our mock encoder returns a vector based on len("claim")
+    vec = dummy_encoder.encode("claim")
+    distances, indices = dummy_faiss_index.search(vec.reshape(1, -1), 1)
+    expected_idx = indices[0][0]
+
+    assert bundle.passages[0].document_id == dummy_corpus[expected_idx].document_id
+    assert bundle.passages[0].span_id == dummy_corpus[expected_idx].span_id
+    assert bundle.passages[0].text == dummy_corpus[expected_idx].text
+
+
+def test_faiss_retriever_returns_evidence_bundle(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify return type is EvidenceBundle."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=1)
+    bundle = retriever.retrieve("claim", definition)
+    assert isinstance(bundle, EvidenceBundle)
+
+
+def test_faiss_retriever_metadata_strategy_id(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify metadata.strategy_id == 'faiss'."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=1)
+    bundle = retriever.retrieve("claim", definition)
+    assert bundle.metadata.strategy_id == "faiss"
+
+
+def test_faiss_retriever_metadata_top_k(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify metadata.top_k == definition.top_k."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=3)
+    bundle = retriever.retrieve("claim", definition)
+    assert bundle.metadata.top_k == 3
+
+
+def test_faiss_retriever_determinism(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify identical claims produce identical bundles."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=3)
+
+    bundle1 = retriever.retrieve("claim", definition)
+    bundle2 = retriever.retrieve("claim", definition)
+
+    assert bundle1 == bundle2
+
+
+def test_faiss_retriever_handles_fewer_results_than_top_k(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify behavior when index has fewer elements than top_k."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    # We have 5 elements. Request 10.
+    definition = FAISSRetrievalDefinition(top_k=10)
+    bundle = retriever.retrieve("claim", definition)
+    assert len(bundle.passages) == 5
+
+
+def test_faiss_retriever_encoder_is_called_with_claim(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+) -> None:
+    """Verify encoder is invoked exactly once with the claim string."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    mock_encoder = MagicMock(spec=QueryEncoder)
+    mock_encoder.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, mock_encoder)
+    definition = FAISSRetrievalDefinition(top_k=1)
+
+    retriever.retrieve("claim", definition)
+    mock_encoder.encode.assert_called_once_with("claim")
+
+
+def test_faiss_retriever_encoder_exception_wraps_to_execution_error(
+    dummy_faiss_index: faiss.Index,
+    dummy_corpus: tuple[CorpusEntry, ...],
+) -> None:
+    """Verify encoder failures raise RetrievalExecutionError."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    mock_encoder = MagicMock(spec=QueryEncoder)
+    mock_encoder.encode.side_effect = ValueError("Encoder failed")
+
+    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, mock_encoder)
+    definition = FAISSRetrievalDefinition(top_k=1)
+
+    with pytest.raises(
+        RetrievalExecutionError, match="FAISS retrieval execution failed"
+    ):
+        retriever.retrieve("claim", definition)
+
+
+def test_faiss_retriever_search_exception_wraps_to_execution_error(
+    dummy_corpus: tuple[CorpusEntry, ...],
+    dummy_encoder: QueryEncoder,
+) -> None:
+    """Verify faiss.Index failures raise RetrievalExecutionError."""
+    from src.core.retrieval.implementations import FAISSRetriever
+
+    mock_index = MagicMock(spec=faiss.Index)
+    mock_index.search.side_effect = RuntimeError("FAISS crashed")
+
+    retriever = FAISSRetriever(mock_index, dummy_corpus, dummy_encoder)
+    definition = FAISSRetrievalDefinition(top_k=1)
+
+    with pytest.raises(
+        RetrievalExecutionError, match="FAISS retrieval execution failed"
+    ):
+        retriever.retrieve("claim", definition)

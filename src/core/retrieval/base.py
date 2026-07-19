@@ -2,6 +2,8 @@
 
 from typing import Protocol, runtime_checkable
 
+import numpy as np
+
 from src.core.retrieval.retrieval_models import EvidenceBundle, RetrievalDefinition
 
 
@@ -23,5 +25,17 @@ class BaseRetriever(Protocol):
 
         Returns:
         - EvidenceBundle: A fully materialized, immutable ordered collection of retrieved passages.
+        """
+        ...
+
+
+@runtime_checkable
+class QueryEncoder(Protocol):
+    """Stateless protocol for encoding textual queries into dense embeddings."""
+
+    def encode(self, text: str) -> np.ndarray:
+        """
+        Encodes a textual query into a dense numpy array compatible with the injected FAISS index.
+        The encoder is fully responsible for any required normalization (e.g. L2) before returning.
         """
         ...

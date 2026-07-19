@@ -46,6 +46,22 @@ class BM25RetrievalDefinition(RetrievalDefinition):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class FAISSRetrievalDefinition(RetrievalDefinition):
+    """Immutable configuration for a FAISS retrieval invocation."""
+
+    top_k: int = Field(
+        ...,
+        gt=0,
+        description="Maximum number of passages to return.",
+    )
+    similarity_threshold: float | None = Field(
+        default=None,
+        description="Optional minimum cosine similarity filter.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 class RetrievalMetadata(BaseModel):
     """Minimal immutable execution provenance attached to each EvidenceBundle."""
 

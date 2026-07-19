@@ -46,6 +46,7 @@
 - [x] M7.3 Loading Profiles
 - [x] M8.1 Evidence Retrieval Framework
 - [x] M8.2 BM25 Lexical Retrieval
+- [x] M8.3 FAISS Semantic Retrieval
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
