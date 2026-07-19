@@ -260,12 +260,16 @@ class ExportProfileNotFoundError(ArbiterError):
 
 
 class LoadingConfigurationError(ArbiterError):
-    """Raised when a loading definition and strategy are incompatible."""
-
-    pass
+    """Raised when a loading strategy receives an incompatible or malformed configuration."""
 
 
 class LoadingExecutionError(ArbiterError):
-    """Raised when the loading subsystem encounters a reconstruction or IO failure."""
+    """Raised when dataset reconstruction fails at runtime."""
 
-    pass
+
+class DuplicateLoadingProfileError(ArbiterError):
+    """Raised when duplicate loading profile identifiers exist during registry construction."""
+
+
+class LoadingProfileNotFoundError(ArbiterError):
+    """Raised when a loading profile cannot be resolved from the registry."""

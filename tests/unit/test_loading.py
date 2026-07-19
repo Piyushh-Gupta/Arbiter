@@ -15,11 +15,18 @@ from src.core.datasets.loading_models import (
     ArbiterDataset,
     JsonlLoadingDefinition,
     LoadingDefinition,
+    LoadingProfile,
+    LoadingProfileRegistry,
 )
 from src.core.datasets.mapping_models import FactVerificationRecord, TaskRecord
 from src.core.datasets.normalization_models import ProvenanceMetadata
 from src.core.datasets.serialization_models import DatasetManifest, SerializationFormat
-from src.core.exceptions import LoadingConfigurationError, LoadingExecutionError
+from src.core.exceptions import (
+    DuplicateLoadingProfileError,
+    LoadingConfigurationError,
+    LoadingExecutionError,
+    LoadingProfileNotFoundError,
+)
 
 
 @pytest.fixture
@@ -91,9 +98,6 @@ def test_dataset_loader_orchestration_success(
 
     result = loader.load(dummy_artifact, dummy_definition, mock_strategy)
 
-    # Verify compatibility validation was executed exactly once
-    mock_strategy.validate_compatibility.assert_called_once_with(dummy_definition)
-
     # Verify load was delegated exactly once preserving artifact and definition identities
     mock_strategy.load.assert_called_once_with(dummy_artifact, dummy_definition)
 
@@ -101,22 +105,16 @@ def test_dataset_loader_orchestration_success(
     assert result is dummy_dataset
 
 
-def test_dataset_loader_compatibility_fail_fast(
+def test_dataset_loader_compatibility_removal(
     dummy_artifact: SerializedArtifact,
     dummy_definition: LoadingDefinition,
 ) -> None:
-    """Test that incompatibility natively halts execution before loading begins."""
+    """Test that DatasetLoader no longer performs compatibility validation."""
     loader = DatasetLoader()
     mock_strategy = MagicMock(spec=BaseLoader)
-    mock_strategy.validate_compatibility.side_effect = LoadingConfigurationError(
-        "Incompatible"
-    )
 
-    with pytest.raises(LoadingConfigurationError, match="Incompatible"):
-        loader.load(dummy_artifact, dummy_definition, mock_strategy)
-
-    # Load should never be invoked if compatibility validation fails
-    mock_strategy.load.assert_not_called()
+    loader.load(dummy_artifact, dummy_definition, mock_strategy)
+    mock_strategy.validate_compatibility.assert_not_called()
 
 
 def test_dataset_loader_execution_fail_fast(
@@ -131,7 +129,6 @@ def test_dataset_loader_execution_fail_fast(
     with pytest.raises(LoadingExecutionError, match="IO Failure"):
         loader.load(dummy_artifact, dummy_definition, mock_strategy)
 
-    mock_strategy.validate_compatibility.assert_called_once_with(dummy_definition)
     mock_strategy.load.assert_called_once_with(dummy_artifact, dummy_definition)
 
 
@@ -150,8 +147,101 @@ def test_dataset_loader_stateless_execution(
         result = loader.load(dummy_artifact, dummy_definition, mock_strategy)
         assert result is dummy_dataset
 
-    assert mock_strategy.validate_compatibility.call_count == 5
     assert mock_strategy.load.call_count == 5
+
+
+def test_loading_profile_immutability(
+    dummy_definition: LoadingDefinition,
+) -> None:
+    """Test that LoadingProfile is strictly immutable."""
+    mock_strategy = MagicMock(spec=BaseLoader)
+    profile = LoadingProfile(
+        profile_id="test", definition=dummy_definition, strategy=mock_strategy
+    )
+    with pytest.raises(Exception):
+        profile.profile_id = "mutated"
+
+    # Verify compatibility was checked during construction
+    mock_strategy.validate_compatibility.assert_called_once_with(dummy_definition)
+
+
+def test_loading_profile_compatibility_fail_fast(
+    dummy_definition: LoadingDefinition,
+) -> None:
+    """Test that profile construction halts if definition and strategy are incompatible."""
+    mock_strategy = MagicMock(spec=BaseLoader)
+    mock_strategy.validate_compatibility.side_effect = LoadingConfigurationError(
+        "Incompatible"
+    )
+    with pytest.raises(LoadingConfigurationError, match="Incompatible"):
+        LoadingProfile(
+            profile_id="test", definition=dummy_definition, strategy=mock_strategy
+        )
+
+
+def test_loading_profile_registry_success(
+    dummy_definition: LoadingDefinition,
+) -> None:
+    """Test successful construction and resolution from LoadingProfileRegistry."""
+    mock_strategy = MagicMock(spec=BaseLoader)
+    profile = LoadingProfile(
+        profile_id="test", definition=dummy_definition, strategy=mock_strategy
+    )
+    registry = LoadingProfileRegistry(profiles=(profile,))
+
+    resolved = registry.resolve("test")
+    assert resolved is profile
+
+
+def test_loading_profile_registry_duplicates(
+    dummy_definition: LoadingDefinition,
+) -> None:
+    """Test that registry detects duplicate IDs upon construction."""
+    mock_strategy = MagicMock(spec=BaseLoader)
+    profile1 = LoadingProfile(
+        profile_id="test", definition=dummy_definition, strategy=mock_strategy
+    )
+    profile2 = LoadingProfile(
+        profile_id="test", definition=dummy_definition, strategy=mock_strategy
+    )
+    with pytest.raises(DuplicateLoadingProfileError):
+        LoadingProfileRegistry(profiles=(profile1, profile2))
+
+
+def test_loading_profile_registry_not_found() -> None:
+    """Test resolution of unknown identifier."""
+    registry = LoadingProfileRegistry(profiles=())
+    with pytest.raises(LoadingProfileNotFoundError):
+        registry.resolve("unknown")
+
+
+def test_execution_equivalence(
+    dummy_artifact: SerializedArtifact,
+    dummy_definition: LoadingDefinition,
+    dummy_dataset: ArbiterDataset,
+) -> None:
+    """Test execution equivalence between direct invocation and profile invocation."""
+    loader = DatasetLoader()
+    mock_strategy = MagicMock(spec=BaseLoader)
+    mock_strategy.load.return_value = dummy_dataset
+
+    # 1. Direct Invocation
+    result1 = loader.load(dummy_artifact, dummy_definition, mock_strategy)
+
+    # 2. Profile Invocation
+    profile = LoadingProfile(
+        profile_id="test", definition=dummy_definition, strategy=mock_strategy
+    )
+    registry = LoadingProfileRegistry(profiles=(profile,))
+    resolved = registry.resolve("test")
+
+    result2 = loader.load(dummy_artifact, resolved.definition, resolved.strategy)
+
+    # Verify Identical Results
+    assert result1 is dummy_dataset
+    assert result2 is dummy_dataset
+    assert mock_strategy.load.call_count == 2
+    mock_strategy.load.assert_called_with(dummy_artifact, dummy_definition)
 
 
 @pytest.fixture

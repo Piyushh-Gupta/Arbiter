@@ -43,6 +43,7 @@
 ## In Progress
 - [x] M7.1 Dataset Loading Framework
 - [x] M7.2 JSONL Dataset Loader
+- [x] M7.3 Loading Profiles
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)

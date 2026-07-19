@@ -120,9 +120,8 @@ class DatasetLoader:
         Orchestrates the execution of a single loading strategy.
 
         Execution Semantics:
-        1. Invokes strategy.validate_compatibility(definition) to fail-fast.
+        1. Assumes definition and strategy are structurally compatible.
         2. Injects the SerializedArtifact and LoadingDefinition into strategy.load().
         3. Returns the exact ArbiterDataset produced by the strategy without modification.
         """
-        strategy.validate_compatibility(definition)
         return strategy.load(artifact, definition)
