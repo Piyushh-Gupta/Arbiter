@@ -289,3 +289,11 @@ class DuplicateRetrievalProfileError(ArbiterError):
 
 class RetrievalProfileNotFoundError(ArbiterError):
     """Raised when a retrieval profile cannot be resolved from the registry."""
+
+
+class RerankingConfigurationError(ArbiterError):
+    """Raised when a reranking strategy receives an incompatible or malformed definition."""
+
+
+class RerankingExecutionError(ArbiterError):
+    """Raised when a reranking strategy encounters a runtime failure."""

@@ -48,6 +48,7 @@
 - [x] M8.2 BM25 Lexical Retrieval
 - [x] M8.3 FAISS Semantic Retrieval
 - [x] M8.4 Hybrid Retrieval
+- [x] M8.5 Cross-Encoder Reranking
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
