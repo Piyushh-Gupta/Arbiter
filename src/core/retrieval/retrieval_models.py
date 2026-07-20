@@ -1,8 +1,21 @@
 """Immutable domain models for the Evidence Retrieval subsystem."""
 
+import typing
 from typing import Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    PrivateAttr,
+    model_validator,
+)
+
+if typing.TYPE_CHECKING:
+    from src.core.retrieval.base import BaseRetriever
+else:
+    BaseRetriever = typing.Any
 
 
 class RetrievalDefinition(BaseModel):
@@ -148,3 +161,66 @@ class EvidenceBundle(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
+
+
+class RetrievalProfile(BaseModel):
+    """Immutable reusable wrapper binding a retrieval definition to its execution strategy."""
+
+    profile_id: str = Field(
+        ..., description="Unique identifier for this retrieval profile."
+    )
+    definition: RetrievalDefinition = Field(
+        ...,
+        description="The strictly immutable configuration for this retrieval strategy.",
+    )
+    strategy: "BaseRetriever" = Field(
+        ..., description="The stateless executable strategy resolving the definition."
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "RetrievalProfile":
+        """Statically verifies compatibility between the definition and strategy upon construction."""
+        self.strategy.validate_compatibility(self.definition)
+        return self
+
+
+class RetrievalProfileRegistry(BaseModel):
+    """Immutable namespace for securely resolving named retrieval profiles."""
+
+    profiles: tuple[RetrievalProfile, ...] = Field(
+        ...,
+        min_length=1,
+        description="The abstract collection of registered retrieval profiles.",
+    )
+
+    _profile_index: dict[str, RetrievalProfile] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "RetrievalProfileRegistry":
+        from src.core.exceptions import DuplicateRetrievalProfileError
+
+        index: dict[str, RetrievalProfile] = {}
+        for profile in self.profiles:
+            if profile.profile_id in index:
+                raise DuplicateRetrievalProfileError(
+                    f"Duplicate retrieval profile identifier: {profile.profile_id}"
+                )
+            index[profile.profile_id] = profile
+
+        # Bypass Pydantic's frozen constraint to initialize the O(1) private lookup table
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> RetrievalProfile:
+        """Resolves a profile statelessly in O(1) time."""
+        from src.core.exceptions import RetrievalProfileNotFoundError
+
+        if profile_id not in self._profile_index:
+            raise RetrievalProfileNotFoundError(
+                f"Retrieval profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]
