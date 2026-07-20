@@ -47,6 +47,7 @@
 - [x] M8.1 Evidence Retrieval Framework
 - [x] M8.2 BM25 Lexical Retrieval
 - [x] M8.3 FAISS Semantic Retrieval
+- [x] M8.4 Hybrid Retrieval
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)

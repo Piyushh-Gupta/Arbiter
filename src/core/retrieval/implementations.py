@@ -15,6 +15,7 @@ from src.core.retrieval.retrieval_models import (
     EvidenceBundle,
     EvidencePassage,
     FAISSRetrievalDefinition,
+    HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
 )
@@ -222,4 +223,119 @@ class FAISSRetriever(BaseRetriever):
                 raise
             raise RetrievalExecutionError(
                 f"FAISS retrieval execution failed: {e}"
+            ) from e
+
+
+class HybridRetriever(BaseRetriever):
+    """
+    Stateless concrete execution strategy for hybrid (BM25 + FAISS) retrieval
+    using Reciprocal Rank Fusion (RRF).
+    """
+
+    def __init__(
+        self,
+        bm25_retriever: BM25Retriever,
+        faiss_retriever: FAISSRetriever,
+    ) -> None:
+        """
+        Initializes the hybrid retriever with fully constructed constituents.
+        """
+        self._bm25 = bm25_retriever
+        self._faiss = faiss_retriever
+
+    def validate_compatibility(self, definition: RetrievalDefinition) -> None:
+        """Fails fast if the definition is not a HybridRetrievalDefinition."""
+        if not isinstance(definition, HybridRetrievalDefinition):
+            raise RetrievalConfigurationError(
+                f"HybridRetriever requires HybridRetrievalDefinition, got {type(definition).__name__}"
+            )
+
+    def retrieve(self, claim: str, definition: RetrievalDefinition) -> EvidenceBundle:
+        """
+        Executes hybrid retrieval and fuses results via RRF.
+        """
+        if not isinstance(definition, HybridRetrievalDefinition):
+            raise RetrievalConfigurationError(
+                f"HybridRetriever requires HybridRetrievalDefinition, got {type(definition).__name__}"
+            )
+
+        try:
+            # 1. Execute constituent retrievers with ephemeral threshold-free definitions
+            bm25_def = BM25RetrievalDefinition(top_k=definition.bm25_top_k)
+            faiss_def = FAISSRetrievalDefinition(top_k=definition.faiss_top_k)
+
+            bm25_bundle = self._bm25.retrieve(claim, bm25_def)
+            faiss_bundle = self._faiss.retrieve(claim, faiss_def)
+
+            # 2. Compute RRF scores
+            # Use (document_id, span_id) as the identity key.
+            rrf_scores: dict[tuple[str, str], float] = {}
+            passage_map: dict[tuple[str, str], EvidencePassage] = {}
+
+            # BM25 ranks
+            for rank_zero_indexed, passage in enumerate(bm25_bundle.passages):
+                rank = rank_zero_indexed + 1
+                key = (passage.document_id, passage.span_id)
+                if key not in passage_map:
+                    passage_map[key] = passage
+                if key not in rrf_scores:
+                    rrf_scores[key] = 0.0
+                rrf_scores[key] += 1.0 / (definition.rrf_k + rank)
+
+            # FAISS ranks
+            for rank_zero_indexed, passage in enumerate(faiss_bundle.passages):
+                rank = rank_zero_indexed + 1
+                key = (passage.document_id, passage.span_id)
+                if key not in passage_map:
+                    passage_map[key] = passage
+                if key not in rrf_scores:
+                    rrf_scores[key] = 0.0
+                rrf_scores[key] += 1.0 / (definition.rrf_k + rank)
+
+            # 3. Sort by descending RRF score, breaking ties lexicographically by (document_id, span_id)
+            sorted_keys = sorted(
+                rrf_scores.keys(), key=lambda k: (-rrf_scores[k], k[0], k[1])
+            )
+
+            # 4. Truncate to top_k and assemble bundle
+            top_keys = sorted_keys[: definition.top_k]
+            fused_passages = []
+
+            for key in top_keys:
+                original_passage = passage_map[key]
+                try:
+                    fused_passage = EvidencePassage(
+                        document_id=original_passage.document_id,
+                        span_id=original_passage.span_id,
+                        text=original_passage.text,
+                        score=rrf_scores[key],
+                        metadata=original_passage.metadata,
+                    )
+                    fused_passages.append(fused_passage)
+                except ValidationError as e:
+                    raise RetrievalExecutionError(
+                        f"Failed to construct EvidencePassage for fused key {key}: {e}"
+                    ) from e
+
+            try:
+                bundle = EvidenceBundle(
+                    claim=claim,
+                    passages=tuple(fused_passages),
+                    metadata=RetrievalMetadata(
+                        strategy_id="hybrid",
+                        top_k=definition.top_k,
+                    ),
+                )
+            except ValidationError as e:
+                raise RetrievalExecutionError(
+                    f"Failed to construct EvidenceBundle: {e}"
+                ) from e
+
+            return bundle
+
+        except Exception as e:
+            if isinstance(e, RetrievalExecutionError):
+                raise
+            raise RetrievalExecutionError(
+                f"Hybrid retrieval execution failed: {e}"
             ) from e

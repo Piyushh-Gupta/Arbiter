@@ -10,12 +10,18 @@ from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionError
 from src.core.retrieval.base import BaseRetriever, QueryEncoder
+from src.core.retrieval.implementations import (
+    BM25Retriever,
+    FAISSRetriever,
+    HybridRetriever,
+)
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
     CorpusEntry,
     EvidenceBundle,
     EvidencePassage,
     FAISSRetrievalDefinition,
+    HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
 )
@@ -254,7 +260,6 @@ def test_bm25_retriever_satisfies_base_retriever_protocol(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify isinstance(BM25Retriever(...), BaseRetriever)."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     assert isinstance(retriever, BaseRetriever)
@@ -266,7 +271,6 @@ def test_bm25_retriever_accepts_bm25_definition(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify validate_compatibility succeeds on valid definition."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=3)
@@ -279,7 +283,6 @@ def test_bm25_retriever_rejects_base_definition(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify RetrievalConfigurationError on wrong definition type."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = RetrievalDefinition()
@@ -293,7 +296,6 @@ def test_bm25_retriever_returns_top_k_passages(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify exact count returned for a 5-entry corpus."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=2)
@@ -307,7 +309,6 @@ def test_bm25_retriever_descending_score_order(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify passages are sorted by descending score."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=5)
@@ -323,7 +324,6 @@ def test_bm25_retriever_score_threshold_filters_low_scores(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify passages below threshold are excluded."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
 
@@ -347,7 +347,6 @@ def test_bm25_retriever_score_threshold_none_returns_all(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify None threshold disables filtering."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=5, score_threshold=None)
@@ -361,7 +360,6 @@ def test_bm25_retriever_identity(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify document_id/span_id match corpus entry for top result."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=1)
@@ -378,7 +376,6 @@ def test_bm25_retriever_returns_evidence_bundle(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify return type is EvidenceBundle."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=1)
@@ -392,7 +389,6 @@ def test_bm25_retriever_metadata_strategy_id(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify metadata.strategy_id == 'bm25'."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=1)
@@ -406,7 +402,6 @@ def test_bm25_retriever_metadata_top_k(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify metadata.top_k == definition.top_k."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=3)
@@ -420,7 +415,6 @@ def test_bm25_retriever_determinism(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Verify identical claims produce identical bundles."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     retriever = BM25Retriever(bm25_index, dummy_corpus, dummy_tokenizer)
     definition = BM25RetrievalDefinition(top_k=3)
@@ -435,7 +429,6 @@ def test_bm25_retriever_empty_corpus_returns_empty_bundle(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Empty corpus should return empty bundle without error."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     mock_index = MagicMock()
     mock_index.get_scores.return_value = np.array([])
@@ -451,7 +444,6 @@ def test_bm25_retriever_propagates_execution_error(
     dummy_tokenizer: Callable[[str], list[str]],
 ) -> None:
     """Mock get_scores to raise; verify RetrievalExecutionError."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     class FaultyIndex(BM25Okapi):  # type: ignore[misc]
         def __init__(self) -> None:
@@ -474,7 +466,6 @@ def test_bm25_retriever_tokenizer_injection(
     dummy_corpus: tuple[CorpusEntry, ...],
 ) -> None:
     """Verify the injected tokenizer is called with the claim string during retrieval."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     mock_tokenizer = MagicMock(return_value=["mocked"])
     retriever = BM25Retriever(bm25_index, dummy_corpus, mock_tokenizer)
@@ -489,7 +480,6 @@ def test_bm25_retriever_tokenizer_consistency(
     dummy_corpus: tuple[CorpusEntry, ...],
 ) -> None:
     """Verify that a custom tokenizer produces different top results than a whitespace tokenizer."""
-    from src.core.retrieval.implementations import BM25Retriever
 
     def whitespace_tokenizer(text: str) -> list[str]:
         return text.lower().split()
@@ -567,7 +557,6 @@ def test_faiss_retriever_satisfies_base_retriever_protocol(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify isinstance(FAISSRetriever(...), BaseRetriever)."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     assert isinstance(retriever, BaseRetriever)
@@ -598,7 +587,6 @@ def test_faiss_retriever_accepts_faiss_definition(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify validate_compatibility succeeds on valid definition."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=3)
@@ -611,7 +599,6 @@ def test_faiss_retriever_rejects_base_definition(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify RetrievalConfigurationError on wrong definition type."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = RetrievalDefinition()
@@ -625,7 +612,6 @@ def test_faiss_retriever_rejects_bm25_definition(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify RetrievalConfigurationError on BM25 definition."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = BM25RetrievalDefinition(top_k=3)
@@ -639,7 +625,6 @@ def test_faiss_retriever_returns_top_k_passages(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify exact count returned."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=2)
@@ -653,7 +638,6 @@ def test_faiss_retriever_descending_score_order(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify passages are sorted by descending score."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=5)
@@ -669,7 +653,6 @@ def test_faiss_retriever_similarity_threshold_filters_low_scores(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify passages below threshold are excluded."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
 
@@ -690,7 +673,6 @@ def test_faiss_retriever_similarity_threshold_none_returns_all(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify None threshold disables filtering."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=None)
@@ -704,7 +686,6 @@ def test_faiss_retriever_identity(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify document_id/span_id match corpus entry for top result."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=1)
@@ -728,7 +709,6 @@ def test_faiss_retriever_returns_evidence_bundle(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify return type is EvidenceBundle."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=1)
@@ -742,7 +722,6 @@ def test_faiss_retriever_metadata_strategy_id(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify metadata.strategy_id == 'faiss'."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=1)
@@ -756,7 +735,6 @@ def test_faiss_retriever_metadata_top_k(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify metadata.top_k == definition.top_k."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=3)
@@ -770,7 +748,6 @@ def test_faiss_retriever_determinism(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify identical claims produce identical bundles."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = FAISSRetrievalDefinition(top_k=3)
@@ -787,7 +764,6 @@ def test_faiss_retriever_handles_fewer_results_than_top_k(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify behavior when index has fewer elements than top_k."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     # We have 5 elements. Request 10.
@@ -801,7 +777,6 @@ def test_faiss_retriever_encoder_is_called_with_claim(
     dummy_corpus: tuple[CorpusEntry, ...],
 ) -> None:
     """Verify encoder is invoked exactly once with the claim string."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     mock_encoder = MagicMock(spec=QueryEncoder)
     mock_encoder.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
@@ -818,7 +793,6 @@ def test_faiss_retriever_encoder_exception_wraps_to_execution_error(
     dummy_corpus: tuple[CorpusEntry, ...],
 ) -> None:
     """Verify encoder failures raise RetrievalExecutionError."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     mock_encoder = MagicMock(spec=QueryEncoder)
     mock_encoder.encode.side_effect = ValueError("Encoder failed")
@@ -837,7 +811,6 @@ def test_faiss_retriever_search_exception_wraps_to_execution_error(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify faiss.Index failures raise RetrievalExecutionError."""
-    from src.core.retrieval.implementations import FAISSRetriever
 
     mock_index = MagicMock(spec=faiss.Index)
     mock_index.search.side_effect = RuntimeError("FAISS crashed")
@@ -849,3 +822,389 @@ def test_faiss_retriever_search_exception_wraps_to_execution_error(
         RetrievalExecutionError, match="FAISS retrieval execution failed"
     ):
         retriever.retrieve("claim", definition)
+
+
+# ==============================================================================
+# Hybrid Retrieval Tests
+# ==============================================================================
+
+
+@pytest.fixture
+def mock_bm25_retriever() -> MagicMock:
+    return MagicMock(spec=BaseRetriever)
+
+
+@pytest.fixture
+def mock_faiss_retriever() -> MagicMock:
+    return MagicMock(spec=BaseRetriever)
+
+
+def test_hybrid_retrieval_definition_immutability() -> None:
+    definition = HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=5)
+    with pytest.raises(Exception):
+        definition.top_k = 10
+
+
+def test_hybrid_retrieval_definition_requires_positive_top_k() -> None:
+    with pytest.raises(Exception):
+        HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=0)
+
+
+def test_hybrid_retrieval_definition_requires_positive_rrf_k() -> None:
+    with pytest.raises(Exception):
+        HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=5, rrf_k=0)
+
+
+def test_hybrid_retrieval_definition_default_rrf_k_is_60() -> None:
+    definition = HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=5)
+    assert definition.rrf_k == 60
+
+
+def test_hybrid_retriever_satisfies_base_retriever_protocol(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    assert isinstance(retriever, BaseRetriever)
+
+
+def test_hybrid_retriever_accepts_hybrid_definition(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=5)
+    retriever.validate_compatibility(definition)
+
+
+def test_hybrid_retriever_rejects_base_definition(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = RetrievalDefinition()
+    with pytest.raises(RetrievalConfigurationError):
+        retriever.validate_compatibility(definition)
+
+
+def test_hybrid_retriever_rejects_bm25_definition(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = BM25RetrievalDefinition(top_k=5)
+    with pytest.raises(RetrievalConfigurationError):
+        retriever.validate_compatibility(definition)
+
+
+def test_hybrid_retriever_rejects_faiss_definition(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = FAISSRetrievalDefinition(top_k=5)
+    with pytest.raises(RetrievalConfigurationError):
+        retriever.validate_compatibility(definition)
+
+
+def test_hybrid_retriever_delegates_to_bm25_and_faiss(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=5),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=5),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=10, faiss_top_k=15, top_k=5)
+
+    retriever.retrieve("claim", definition)
+
+    # Assert BM25 called with correct ephemeral definition
+    bm25_call_args = mock_bm25_retriever.retrieve.call_args[0]
+    assert bm25_call_args[0] == "claim"
+    assert isinstance(bm25_call_args[1], BM25RetrievalDefinition)
+    assert bm25_call_args[1].top_k == 10
+
+    # Assert FAISS called with correct ephemeral definition
+    faiss_call_args = mock_faiss_retriever.retrieve.call_args[0]
+    assert faiss_call_args[0] == "claim"
+    assert isinstance(faiss_call_args[1], FAISSRetrievalDefinition)
+    assert faiss_call_args[1].top_k == 15
+
+
+def test_hybrid_retriever_propagates_bm25_execution_error(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    mock_bm25_retriever.retrieve.side_effect = RetrievalExecutionError("BM25 failed")
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=5)
+
+    with pytest.raises(RetrievalExecutionError, match="BM25 failed"):
+        retriever.retrieve("claim", definition)
+
+
+def test_hybrid_retriever_propagates_faiss_execution_error(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=5),
+    )
+    mock_faiss_retriever.retrieve.side_effect = RetrievalExecutionError("FAISS failed")
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=5)
+
+    with pytest.raises(RetrievalExecutionError, match="FAISS failed"):
+        retriever.retrieve("claim", definition)
+
+
+def test_hybrid_retriever_deduplicates_passages(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    p1 = EvidencePassage(document_id="doc1", span_id="span1", text="text1", score=1.0)
+    p2 = EvidencePassage(document_id="doc2", span_id="span2", text="text2", score=0.9)
+
+    # Both retrievers return p1. BM25 also returns p2.
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1, p2),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=2),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1,),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=1),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=2, faiss_top_k=1, top_k=5)
+
+    bundle = retriever.retrieve("claim", definition)
+
+    # Should only have 2 passages total (p1 and p2)
+    assert len(bundle.passages) == 2
+    assert bundle.passages[0].document_id == "doc1"
+    assert bundle.passages[1].document_id == "doc2"
+
+
+def test_hybrid_retriever_returns_top_k_passages(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    passages_bm25 = tuple(
+        EvidencePassage(document_id=f"doc_b_{i}", span_id="s", text="t", score=1.0)
+        for i in range(5)
+    )
+    passages_faiss = tuple(
+        EvidencePassage(document_id=f"doc_f_{i}", span_id="s", text="t", score=1.0)
+        for i in range(5)
+    )
+
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=passages_bm25,
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=5),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=passages_faiss,
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=5),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    # 10 unique passages exist, but we only want top_k=3
+    definition = HybridRetrievalDefinition(bm25_top_k=5, faiss_top_k=5, top_k=3)
+
+    bundle = retriever.retrieve("claim", definition)
+
+    assert len(bundle.passages) == 3
+
+
+def test_hybrid_retriever_rrf_score_boosts_passages_in_both_lists(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    p_both = EvidencePassage(document_id="doc_both", span_id="s", text="t", score=1.0)
+    p_bm25_only = EvidencePassage(
+        document_id="doc_bm25", span_id="s", text="t", score=0.9
+    )
+    p_faiss_only = EvidencePassage(
+        document_id="doc_faiss", span_id="s", text="t", score=0.8
+    )
+
+    # BM25 returns p_bm25_only at rank 1, p_both at rank 2
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p_bm25_only, p_both),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=2),
+    )
+    # FAISS returns p_faiss_only at rank 1, p_both at rank 2
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p_faiss_only, p_both),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=2),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(
+        bm25_top_k=2, faiss_top_k=2, top_k=5, rrf_k=60
+    )
+
+    bundle = retriever.retrieve("claim", definition)
+
+    # p_both gets 1/(60+2) + 1/(60+2) = 2/62 = 0.0322
+    # p_bm25_only gets 1/(60+1) = 1/61 = 0.0163
+    # p_faiss_only gets 1/(60+1) = 1/61 = 0.0163
+    # So p_both should be ranked first despite being rank 2 in both constituent lists
+
+    assert bundle.passages[0].document_id == "doc_both"
+    assert bundle.passages[1].score == 1.0 / 61.0
+    assert bundle.passages[2].score == 1.0 / 61.0
+
+
+def test_hybrid_retriever_descending_score_order(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    p1 = EvidencePassage(document_id="d1", span_id="s", text="t", score=1.0)
+    p2 = EvidencePassage(document_id="d2", span_id="s", text="t", score=1.0)
+
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1, p2),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=2),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1,),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=1),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=2, faiss_top_k=1, top_k=5)
+
+    bundle = retriever.retrieve("claim", definition)
+
+    scores = [p.score for p in bundle.passages]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_hybrid_retriever_tie_breaking_deterministic(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    # Both passages appear exactly once at the exact same rank in different lists
+    # So they will have the exact same RRF score.
+    p_b = EvidencePassage(document_id="doc_B", span_id="s", text="t", score=1.0)
+    p_a = EvidencePassage(document_id="doc_A", span_id="s", text="t", score=1.0)
+
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p_b,),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=1),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p_a,),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=1),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=1, faiss_top_k=1, top_k=2)
+
+    bundle = retriever.retrieve("claim", definition)
+
+    # Scores are equal. Tie break by document_id (lexicographical).
+    # "doc_A" < "doc_B", so p_a should be first.
+    assert bundle.passages[0].score == bundle.passages[1].score
+    assert bundle.passages[0].document_id == "doc_A"
+    assert bundle.passages[1].document_id == "doc_B"
+
+
+def test_hybrid_retriever_no_overlap_union_result(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    p1 = EvidencePassage(document_id="d1", span_id="s", text="t", score=1.0)
+    p2 = EvidencePassage(document_id="d2", span_id="s", text="t", score=1.0)
+
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1,),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=1),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p2,),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=1),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=1, faiss_top_k=1, top_k=5)
+
+    bundle = retriever.retrieve("claim", definition)
+    assert len(bundle.passages) == 2
+    # RRF scores should be equal (rank 1), so tie-break kicks in: d1 < d2
+    assert bundle.passages[0].document_id == "d1"
+    assert bundle.passages[1].document_id == "d2"
+
+
+def test_hybrid_retriever_full_overlap_deduplication(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    p1 = EvidencePassage(document_id="d1", span_id="s", text="t", score=1.0)
+    p2 = EvidencePassage(document_id="d2", span_id="s", text="t", score=1.0)
+
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1, p2),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=2),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(p1, p2),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=2),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=2, faiss_top_k=2, top_k=5)
+
+    bundle = retriever.retrieve("claim", definition)
+    # Output should have exactly 2 passages since both lists contain the exact same 2 passages
+    assert len(bundle.passages) == 2
+
+
+def test_hybrid_retriever_metadata_properties(
+    mock_bm25_retriever: MagicMock,
+    mock_faiss_retriever: MagicMock,
+) -> None:
+    mock_bm25_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(),
+        metadata=RetrievalMetadata(strategy_id="bm25", top_k=1),
+    )
+    mock_faiss_retriever.retrieve.return_value = EvidenceBundle(
+        claim="claim",
+        passages=(),
+        metadata=RetrievalMetadata(strategy_id="faiss", top_k=1),
+    )
+
+    retriever = HybridRetriever(mock_bm25_retriever, mock_faiss_retriever)
+    definition = HybridRetrievalDefinition(bm25_top_k=1, faiss_top_k=1, top_k=3)
+
+    bundle = retriever.retrieve("claim", definition)
+    assert bundle.metadata.strategy_id == "hybrid"
+    assert bundle.metadata.top_k == 3

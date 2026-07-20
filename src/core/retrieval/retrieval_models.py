@@ -62,6 +62,33 @@ class FAISSRetrievalDefinition(RetrievalDefinition):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class HybridRetrievalDefinition(RetrievalDefinition):
+    """Immutable configuration for a hybrid retrieval invocation."""
+
+    bm25_top_k: int = Field(
+        ...,
+        gt=0,
+        description="Candidate pool size requested from BM25 constituent.",
+    )
+    faiss_top_k: int = Field(
+        ...,
+        gt=0,
+        description="Candidate pool size requested from FAISS constituent.",
+    )
+    top_k: int = Field(
+        ...,
+        gt=0,
+        description="Maximum fused passages to return.",
+    )
+    rrf_k: int = Field(
+        default=60,
+        gt=0,
+        description="RRF smoothing constant.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 class RetrievalMetadata(BaseModel):
     """Minimal immutable execution provenance attached to each EvidenceBundle."""
 
