@@ -64,6 +64,9 @@
 - [x] M11.3 Failure-Aware Uncertainty Estimator
 - [x] M11.4 Uncertainty Profiles
 
+## M12 Decision Engine
+- [x] M12.1 Decision Framework
+
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
 - [ ] Dataset Generation Scripts

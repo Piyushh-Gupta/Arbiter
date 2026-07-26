@@ -345,3 +345,11 @@ class DuplicateUncertaintyProfileError(ArbiterError):
 
 class UncertaintyProfileNotFoundError(ArbiterError):
     """Raised when an uncertainty profile cannot be resolved from the registry."""
+
+
+class DecisionConfigurationError(ArbiterError):
+    """Raised when a decision engine configuration is invalid."""
+
+
+class DecisionExecutionError(ArbiterError):
+    """Raised when a decision engine encounters a runtime failure."""
