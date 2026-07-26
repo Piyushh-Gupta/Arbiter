@@ -72,6 +72,7 @@
 ## M13 Explainability Subsystem
 - [x] M13.1 Explainability Framework
 - [x] M13.2 Rule-Based Explainer
+- [x] M13.3 Explainability Profiles
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)

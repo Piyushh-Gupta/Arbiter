@@ -369,3 +369,11 @@ class ExplanationConfigurationError(ArbiterError):
 
 class ExplanationExecutionError(ArbiterError):
     """Raised when an explainer encounters a runtime failure."""
+
+
+class DuplicateExplanationProfileError(ArbiterError):
+    """Raised when an ExplanationProfileRegistry encounters a duplicate profile_id."""
+
+
+class ExplanationProfileNotFoundError(ArbiterError):
+    """Raised when an explanation profile cannot be resolved from the registry."""
