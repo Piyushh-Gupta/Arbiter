@@ -1,7 +1,10 @@
 """Concrete implementations for the Failure Analysis subsystem."""
 
 from src.core.exceptions import FailureAnalysisConfigurationError
-from src.core.verification.verification_models import VerificationResult
+from src.core.verification.verification_models import (
+    VerificationLabel,
+    VerificationResult,
+)
 
 from .failure_analysis_models import (
     FailureAnalysisDefinition,
@@ -10,6 +13,7 @@ from .failure_analysis_models import (
     FailureMetadata,
     FailureSeverity,
     RetrievalFailureAnalysisDefinition,
+    VerificationFailureAnalysisDefinition,
 )
 
 
@@ -133,4 +137,99 @@ class RetrievalFailureAnalyzer:
             severity=final_severity,
             verification_result=verification_result,
             metadata=FailureMetadata(strategy_id="retrieval_failure_analyzer"),
+        )
+
+
+class VerificationFailureAnalyzer:
+    """
+    Analyzes verification defects in a verification pipeline.
+    Stateless and algorithmic; requires no external dependencies.
+    """
+
+    def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
+        """Validates that the definition is a VerificationFailureAnalysisDefinition."""
+        if not isinstance(definition, VerificationFailureAnalysisDefinition):
+            raise FailureAnalysisConfigurationError(
+                f"VerificationFailureAnalyzer requires VerificationFailureAnalysisDefinition, got {type(definition).__name__}"
+            )
+
+    def analyze(
+        self,
+        claim: str,
+        verification_result: VerificationResult,
+        definition: FailureAnalysisDefinition,
+    ) -> FailureAnalysisResult:
+        """
+        Executes structural verification failure analysis.
+        """
+        if not isinstance(definition, VerificationFailureAnalysisDefinition):
+            raise FailureAnalysisConfigurationError(
+                f"VerificationFailureAnalyzer requires VerificationFailureAnalysisDefinition, got {type(definition).__name__}"
+            )
+
+        flags: list[tuple[FailureFlag, FailureSeverity]] = []
+
+        if verification_result.confidence is None:
+            flags.append(
+                (
+                    FailureFlag(
+                        code="ABSENT_CONFIDENCE",
+                        description="The verifier did not produce a confidence score.",
+                    ),
+                    FailureSeverity.HIGH,
+                )
+            )
+        elif verification_result.confidence < definition.min_confidence_threshold:
+            flags.append(
+                (
+                    FailureFlag(
+                        code="LOW_VERIFICATION_CONFIDENCE",
+                        description=f"Confidence score {verification_result.confidence} is below the minimum threshold {definition.min_confidence_threshold}.",
+                    ),
+                    FailureSeverity.HIGH,
+                )
+            )
+
+        if (
+            definition.flag_nei_verdict
+            and verification_result.label == VerificationLabel.NOT_ENOUGH_INFO
+        ):
+            flags.append(
+                (
+                    FailureFlag(
+                        code="NOT_ENOUGH_INFO_VERDICT",
+                        description="The verifier produced a NOT_ENOUGH_INFO verdict.",
+                    ),
+                    FailureSeverity.MEDIUM,
+                )
+            )
+
+        return self._build_result(flags, verification_result)
+
+    def _build_result(
+        self,
+        flags: list[tuple[FailureFlag, FailureSeverity]],
+        verification_result: VerificationResult,
+    ) -> FailureAnalysisResult:
+        """Aggregates severities and constructs the final immutable result."""
+        severity_order = {
+            FailureSeverity.CRITICAL: 4,
+            FailureSeverity.HIGH: 3,
+            FailureSeverity.MEDIUM: 2,
+            FailureSeverity.LOW: 1,
+            FailureSeverity.NONE: 0,
+        }
+
+        final_severity = FailureSeverity.NONE
+        for _, severity in flags:
+            if severity_order[severity] > severity_order[final_severity]:
+                final_severity = severity
+
+        failure_flags = frozenset(flag for flag, _ in flags)
+
+        return FailureAnalysisResult(
+            failure_flags=failure_flags,
+            severity=final_severity,
+            verification_result=verification_result,
+            metadata=FailureMetadata(strategy_id="verification_failure_analyzer"),
         )

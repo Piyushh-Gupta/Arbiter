@@ -93,3 +93,20 @@ class RetrievalFailureAnalysisDefinition(FailureAnalysisDefinition):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class VerificationFailureAnalysisDefinition(FailureAnalysisDefinition):
+    """Configuration for verification failure analysis."""
+
+    min_confidence_threshold: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Minimum acceptable confidence score for the verification verdict.",
+    )
+    flag_nei_verdict: bool = Field(
+        default=True,
+        description="Whether to flag a NOT_ENOUGH_INFO verdict as a pipeline failure.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
