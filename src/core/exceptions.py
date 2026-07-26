@@ -361,3 +361,11 @@ class DuplicateDecisionProfileError(ArbiterError):
 
 class DecisionProfileNotFoundError(ArbiterError):
     """Raised when a decision profile cannot be resolved from the registry."""
+
+
+class ExplanationConfigurationError(ArbiterError):
+    """Raised when an explainer configuration is invalid."""
+
+
+class ExplanationExecutionError(ArbiterError):
+    """Raised when an explainer encounters a runtime failure."""
