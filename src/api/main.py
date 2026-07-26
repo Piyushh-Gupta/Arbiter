@@ -1,33 +1,35 @@
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+"""FastAPI application entry point."""
 
-import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-from src.core.bootstrap import initialize_application
-from src.core.config import settings
-from src.core.logging import setup_logging
-
-logger = structlog.get_logger(__name__)
+from src.api.routes import evaluation, health
+from src.core.exceptions import ArbiterError
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Lifespan events for the application."""
-    setup_logging(settings.log.level)
-    initialize_application()
-    logger.info("Starting up Arbiter API", env=settings.environment)
-    yield
-    logger.info("Shutting down Arbiter API")
+def create_app() -> FastAPI:
+    """Creates and configures the FastAPI application."""
+    app = FastAPI(
+        title="Arbiter API",
+        description="HTTP API layer for the Arbiter pipeline",
+        version="0.1.0",
+    )
+
+    app.include_router(health.router)
+    app.include_router(evaluation.router)
+
+    @app.exception_handler(ArbiterError)
+    async def arbiter_error_handler(
+        request: Request, exc: ArbiterError
+    ) -> JSONResponse:
+        """Global exception handler mapping domain exceptions to HTTP responses."""
+        # By default, ArbiterErrors are configuration or client issues for the API (e.g. ProfileNotFound)
+        return JSONResponse(
+            status_code=400,
+            content={"detail": str(exc)},
+        )
+
+    return app
 
 
-app = FastAPI(
-    title=settings.app_name,
-    description="Trustworthy AI Decision Support System for Evidence-Based Claim Verification",
-    lifespan=lifespan,
-)
-
-
-@app.get("/health")
-async def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+app = create_app()

@@ -81,6 +81,7 @@
 
 ## M15 Orchestration Subsystem
 - [x] M15.1 Pipeline Orchestrator
+- [x] M15.2 FastAPI API Layer
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
