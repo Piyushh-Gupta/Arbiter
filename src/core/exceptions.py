@@ -353,3 +353,11 @@ class DecisionConfigurationError(ArbiterError):
 
 class DecisionExecutionError(ArbiterError):
     """Raised when a decision engine encounters a runtime failure."""
+
+
+class DuplicateDecisionProfileError(ArbiterError):
+    """Raised when a DecisionProfileRegistry encounters a duplicate profile_id."""
+
+
+class DecisionProfileNotFoundError(ArbiterError):
+    """Raised when a decision profile cannot be resolved from the registry."""

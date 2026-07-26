@@ -67,6 +67,7 @@
 ## M12 Decision Engine
 - [x] M12.1 Decision Framework
 - [x] M12.2 Threshold-Based Decision Engine
+- [x] M12.3 Decision Profiles
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
