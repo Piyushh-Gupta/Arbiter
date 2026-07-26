@@ -60,6 +60,7 @@
 - [x] M10.5 Failure Analysis Profiles
 
 - [x] M11.1 Uncertainty Framework
+- [x] M11.2 Confidence-Based Uncertainty Estimator
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)

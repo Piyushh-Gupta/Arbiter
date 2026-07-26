@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.core.failure_analysis.failure_analysis_models import FailureAnalysisResult
 
@@ -76,3 +76,48 @@ class UncertaintyResult(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
+
+
+class ConfidenceUncertaintyDefinition(UncertaintyDefinition):
+    """Configuration for confidence-based uncertainty estimation."""
+
+    none_threshold: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Maximum uncertainty score to be classified as NONE.",
+    )
+    low_threshold: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Maximum uncertainty score to be classified as LOW.",
+    )
+    medium_threshold: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Maximum uncertainty score to be classified as MEDIUM.",
+    )
+    high_threshold: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Maximum uncertainty score to be classified as HIGH.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_threshold_ordering(self) -> "ConfidenceUncertaintyDefinition":
+        """Ensures thresholds are strictly increasing."""
+        if not (
+            self.none_threshold
+            < self.low_threshold
+            < self.medium_threshold
+            < self.high_threshold
+        ):
+            raise ValueError(
+                "Thresholds must be strictly increasing: none < low < medium < high."
+            )
+        return self
