@@ -313,3 +313,11 @@ class DuplicateVerificationProfileError(ArbiterError):
 
 class VerificationProfileNotFoundError(ArbiterError):
     """Raised when a verification profile cannot be resolved from the registry."""
+
+
+class FailureAnalysisConfigurationError(ArbiterError):
+    """Raised when a failure analyzer receives an incompatible or malformed definition."""
+
+
+class FailureAnalysisExecutionError(ArbiterError):
+    """Raised when a failure analyzer encounters a runtime failure."""
