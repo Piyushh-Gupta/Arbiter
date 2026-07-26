@@ -297,3 +297,11 @@ class RerankingConfigurationError(ArbiterError):
 
 class RerankingExecutionError(ArbiterError):
     """Raised when a reranking strategy encounters a runtime failure."""
+
+
+class VerificationConfigurationError(ArbiterError):
+    """Raised when a verifier receives an incompatible or malformed definition."""
+
+
+class VerificationExecutionError(ArbiterError):
+    """Raised when a verifier encounters a runtime failure."""

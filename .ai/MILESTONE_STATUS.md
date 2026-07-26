@@ -50,6 +50,7 @@
 - [x] M8.4 Hybrid Retrieval
 - [x] M8.5 Cross-Encoder Reranking
 - [x] M8.6 Retrieval Profiles
+- [x] M9.1 Verification Framework
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
