@@ -70,3 +70,26 @@ class FailureAnalysisResult(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
+
+
+class RetrievalFailureAnalysisDefinition(FailureAnalysisDefinition):
+    """Configuration for retrieval failure analysis."""
+
+    min_passages: int = Field(
+        ...,
+        gt=0,
+        description="Minimum number of passages required for reliable verification.",
+    )
+    min_score_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional minimum acceptable retrieval score.",
+    )
+    min_unique_documents: int | None = Field(
+        default=None,
+        gt=0,
+        description="Optional minimum number of distinct source documents required.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)

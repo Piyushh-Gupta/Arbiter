@@ -54,6 +54,7 @@
 - [x] M9.2 Natural Language Inference Verifier
 - [x] M9.3 Verification Profiles
 - [x] M10.1 Failure Analysis Framework
+- [x] M10.2 Retrieval Failure Detector
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
