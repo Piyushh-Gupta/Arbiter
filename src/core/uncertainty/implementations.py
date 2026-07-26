@@ -6,6 +6,7 @@ from src.core.exceptions import UncertaintyConfigurationError
 from src.core.failure_analysis.failure_analysis_models import FailureAnalysisResult
 from src.core.uncertainty.uncertainty_models import (
     ConfidenceUncertaintyDefinition,
+    FailureAwareUncertaintyDefinition,
     UncertaintyDefinition,
     UncertaintyFactor,
     UncertaintyLevel,
@@ -88,5 +89,92 @@ class ConfidenceUncertaintyEstimator:
             failure_analysis_result=failure_analysis_result,
             metadata=UncertaintyMetadata(
                 strategy_id="confidence_uncertainty_estimator"
+            ),
+        )
+
+
+class FailureAwareUncertaintyEstimator:
+    """Estimates uncertainty by adjusting baseline confidence using upstream failures."""
+
+    def validate_compatibility(self, definition: UncertaintyDefinition) -> None:
+        """
+        Validates that the provided definition is a FailureAwareUncertaintyDefinition.
+        """
+        if not isinstance(definition, FailureAwareUncertaintyDefinition):
+            raise UncertaintyConfigurationError(
+                f"FailureAwareUncertaintyEstimator requires FailureAwareUncertaintyDefinition, got {type(definition).__name__}"
+            )
+
+    def estimate(
+        self,
+        claim: str,
+        failure_analysis_result: FailureAnalysisResult,
+        definition: UncertaintyDefinition,
+    ) -> UncertaintyResult:
+        """
+        Executes failure-aware uncertainty estimation.
+        """
+        self.validate_compatibility(definition)
+        conf_def = cast(FailureAwareUncertaintyDefinition, definition)
+
+        confidence = failure_analysis_result.verification_result.confidence
+
+        if confidence is None:
+            score = 1.0
+            factors = frozenset(
+                [
+                    UncertaintyFactor(
+                        code="ABSENT_CONFIDENCE",
+                        description="Verification confidence was missing, indicating absolute uncertainty.",
+                    )
+                ]
+            )
+        else:
+            # Calculate maximum applicable penalty
+            severity_penalty = conf_def.severity_penalties.get(
+                failure_analysis_result.severity, 0.0
+            )
+
+            flag_penalties = [
+                conf_def.flag_penalties.get(flag.code, 0.0)
+                for flag in failure_analysis_result.failure_flags
+            ]
+            max_flag_penalty = max(flag_penalties) if flag_penalties else 0.0
+
+            max_penalty = max(severity_penalty, max_flag_penalty)
+
+            if max_penalty > 0.0:
+                adjusted_certainty = confidence * (1.0 - max_penalty)
+                score = round(1.0 - adjusted_certainty, 6)
+                factors = frozenset(
+                    [
+                        UncertaintyFactor(
+                            code="FAILURE_PENALTY_APPLIED",
+                            description=f"Baseline certainty reduced by maximum active failure penalty ({max_penalty}).",
+                        )
+                    ]
+                )
+            else:
+                score = round(1.0 - confidence, 6)
+                factors = frozenset()
+
+        if score <= conf_def.none_threshold:
+            level = UncertaintyLevel.NONE
+        elif score <= conf_def.low_threshold:
+            level = UncertaintyLevel.LOW
+        elif score <= conf_def.medium_threshold:
+            level = UncertaintyLevel.MEDIUM
+        elif score <= conf_def.high_threshold:
+            level = UncertaintyLevel.HIGH
+        else:
+            level = UncertaintyLevel.EXTREME
+
+        return UncertaintyResult(
+            level=level,
+            score=score,
+            factors=factors,
+            failure_analysis_result=failure_analysis_result,
+            metadata=UncertaintyMetadata(
+                strategy_id="failure_aware_uncertainty_estimator"
             ),
         )

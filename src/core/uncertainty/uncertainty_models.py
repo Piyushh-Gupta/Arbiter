@@ -4,7 +4,10 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.core.failure_analysis.failure_analysis_models import FailureAnalysisResult
+from src.core.failure_analysis.failure_analysis_models import (
+    FailureAnalysisResult,
+    FailureSeverity,
+)
 
 
 class UncertaintyLevel(str, Enum):
@@ -120,4 +123,28 @@ class ConfidenceUncertaintyDefinition(UncertaintyDefinition):
             raise ValueError(
                 "Thresholds must be strictly increasing: none < low < medium < high."
             )
+        return self
+
+
+class FailureAwareUncertaintyDefinition(ConfidenceUncertaintyDefinition):
+    """Configuration for failure-aware uncertainty estimation."""
+
+    severity_penalties: dict[FailureSeverity, float] = Field(
+        default_factory=dict,
+        description="Maps overall FailureSeverity to a certainty penalty [0.0, 1.0].",
+    )
+    flag_penalties: dict[str, float] = Field(
+        default_factory=dict,
+        description="Maps specific FailureFlag.code identifiers (e.g., 'CONTRADICTORY_EVIDENCE') to a certainty penalty [0.0, 1.0].",
+    )
+
+    @model_validator(mode="after")
+    def _validate_penalties(self) -> "FailureAwareUncertaintyDefinition":
+        """Ensures all penalties are within [0.0, 1.0]."""
+        for sev, pen in self.severity_penalties.items():
+            if not (0.0 <= pen <= 1.0):
+                raise ValueError(f"Severity penalty for {sev} must be in [0.0, 1.0].")
+        for flag, pen in self.flag_penalties.items():
+            if not (0.0 <= pen <= 1.0):
+                raise ValueError(f"Flag penalty for {flag} must be in [0.0, 1.0].")
         return self

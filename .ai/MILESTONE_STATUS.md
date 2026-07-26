@@ -61,6 +61,7 @@
 
 - [x] M11.1 Uncertainty Framework
 - [x] M11.2 Confidence-Based Uncertainty Estimator
+- [x] M11.3 Failure-Aware Uncertainty Estimator
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
