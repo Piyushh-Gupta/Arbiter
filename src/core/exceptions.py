@@ -329,3 +329,11 @@ class DuplicateFailureAnalysisProfileError(ArbiterError):
 
 class FailureAnalysisProfileNotFoundError(ArbiterError):
     """Raised when a failure analysis profile cannot be resolved from the registry."""
+
+
+class UncertaintyConfigurationError(ArbiterError):
+    """Raised when an uncertainty estimator receives an incompatible definition."""
+
+
+class UncertaintyExecutionError(ArbiterError):
+    """Raised when an uncertainty estimator encounters a runtime failure."""

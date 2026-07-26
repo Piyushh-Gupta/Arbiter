@@ -59,6 +59,8 @@
 - [x] M10.4 Contradiction Analyzer
 - [x] M10.5 Failure Analysis Profiles
 
+- [x] M11.1 Uncertainty Framework
+
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
 - [ ] Dataset Generation Scripts
