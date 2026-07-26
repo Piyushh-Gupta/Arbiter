@@ -1,10 +1,22 @@
-"""FastAPI application entry point."""
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.api.routes import evaluation, health
+from src.core.bootstrap import build_pipeline
+from src.core.config import Settings
 from src.core.exceptions import ArbiterError
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Lifespan events for the FastAPI application."""
+    config = Settings()
+    pipeline = build_pipeline(config)
+    app.state.pipeline = pipeline
+    yield
 
 
 def create_app() -> FastAPI:
@@ -13,6 +25,7 @@ def create_app() -> FastAPI:
         title="Arbiter API",
         description="HTTP API layer for the Arbiter pipeline",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     app.include_router(health.router)

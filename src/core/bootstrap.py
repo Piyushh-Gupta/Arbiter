@@ -1,7 +1,76 @@
 """Application bootstrap and initialization routines."""
 
+from typing import Sequence
+
+from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
+
+from src.core.config import Settings
+from src.core.decision.decision_models import (
+    DecisionProfile,
+    DecisionProfileRegistry,
+    ThresholdDecisionDefinition,
+)
+from src.core.decision.implementations import ThresholdDecisionEngine
+from src.core.evaluation.evaluation_models import (
+    EvaluationProfile,
+    EvaluationProfileRegistry,
+    RuleBasedEvaluationDefinition,
+)
+from src.core.evaluation.implementations import RuleBasedEvaluator
+from src.core.explainability.explainability_models import (
+    ExplanationProfile,
+    ExplanationProfileRegistry,
+    RuleBasedExplanationDefinition,
+)
+from src.core.explainability.implementations import RuleBasedExplainer
+from src.core.failure_analysis.failure_analysis_models import (
+    FailureAnalysisProfile,
+    FailureAnalysisProfileRegistry,
+    VerificationFailureAnalysisDefinition,
+)
+from src.core.failure_analysis.implementations import VerificationFailureAnalyzer
 from src.core.paths import ProjectPaths
+from src.core.pipeline.orchestrator import ArbiterPipeline
+from src.core.retrieval.implementations import BM25Retriever
+from src.core.retrieval.retrieval_models import (
+    BM25RetrievalDefinition,
+    CorpusEntry,
+    RetrievalProfile,
+    RetrievalProfileRegistry,
+)
+from src.core.uncertainty.implementations import FailureAwareUncertaintyEstimator
+from src.core.uncertainty.uncertainty_models import (
+    FailureAwareUncertaintyDefinition,
+    UncertaintyProfile,
+    UncertaintyProfileRegistry,
+)
 from src.core.validation import validate_startup
+from src.core.verification.implementations import NLIVerifier
+from src.core.verification.verification_models import (
+    NLIVerificationDefinition,
+    VerificationLabel,
+    VerificationProfile,
+    VerificationProfileRegistry,
+)
+
+# Alias for type hinting mapping the implementation plan
+AppConfig = Settings
+
+
+class DummyNLIModel:
+    """A dummy NLI model implementation to satisfy DI until actual model loading is implemented."""
+
+    def __init__(self) -> None:
+        self.label_map = {
+            0: VerificationLabel.SUPPORTS,
+            1: VerificationLabel.NOT_ENOUGH_INFO,
+            2: VerificationLabel.REFUTES,
+        }
+
+    def predict(
+        self, claim: str, passages: Sequence[str]
+    ) -> list[tuple[float, float, float]]:
+        return [(1.0, 0.0, 0.0) for _ in passages]
 
 
 def _create_required_directories() -> None:
@@ -19,3 +88,111 @@ def initialize_application() -> None:
     """
     _create_required_directories()
     validate_startup()
+
+
+def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
+    """Builds the retrieval registry."""
+    dummy_corpus = [CorpusEntry(document_id="dummy", span_id="dummy", text="dummy")]
+    dummy_index = BM25Okapi([["dummy"]])
+
+    engine = BM25Retriever(
+        index=dummy_index, corpus=dummy_corpus, tokenizer=lambda x: x.split()
+    )
+    definition = BM25RetrievalDefinition(top_k=5)
+    profile = RetrievalProfile(
+        profile_id="default_retrieval",
+        definition=definition,
+        strategy=engine,
+    )
+    return RetrievalProfileRegistry(profiles=(profile,))
+
+
+def build_verification_registry(config: AppConfig) -> VerificationProfileRegistry:
+    """Builds the verification registry."""
+    engine = NLIVerifier(model=DummyNLIModel(), strategy_id="dummy_nli")
+    definition = NLIVerificationDefinition(top_k=5)
+    profile = VerificationProfile(
+        profile_id="default_verification",
+        definition=definition,
+        verifier=engine,
+    )
+    return VerificationProfileRegistry(profiles=(profile,))
+
+
+def build_failure_analysis_registry(
+    config: AppConfig,
+) -> FailureAnalysisProfileRegistry:
+    """Builds the failure analysis registry."""
+    engine = VerificationFailureAnalyzer()
+    definition = VerificationFailureAnalysisDefinition(min_confidence_threshold=0.5)
+    profile = FailureAnalysisProfile(
+        profile_id="default_failure_analysis",
+        definition=definition,
+        analyzer=engine,
+    )
+    return FailureAnalysisProfileRegistry(profiles=(profile,))
+
+
+def build_uncertainty_registry(config: AppConfig) -> UncertaintyProfileRegistry:
+    """Builds the uncertainty registry."""
+    engine = FailureAwareUncertaintyEstimator()
+    definition = FailureAwareUncertaintyDefinition(
+        none_threshold=0.1, low_threshold=0.3, medium_threshold=0.6, high_threshold=0.9
+    )
+    profile = UncertaintyProfile(
+        profile_id="default_uncertainty",
+        definition=definition,
+        estimator=engine,
+    )
+    return UncertaintyProfileRegistry(profiles=(profile,))
+
+
+def build_decision_registry(config: AppConfig) -> DecisionProfileRegistry:
+    """Builds the decision registry."""
+    engine = ThresholdDecisionEngine()
+    definition = ThresholdDecisionDefinition(
+        accept_max_uncertainty=0.3, reject_max_uncertainty=0.7
+    )
+    profile = DecisionProfile(
+        profile_id="default_decision",
+        definition=definition,
+        engine=engine,
+    )
+    return DecisionProfileRegistry(profiles=(profile,))
+
+
+def build_explanation_registry(config: AppConfig) -> ExplanationProfileRegistry:
+    """Builds the explanation registry."""
+    engine = RuleBasedExplainer()
+    definition = RuleBasedExplanationDefinition()
+    profile = ExplanationProfile(
+        profile_id="default_explanation",
+        definition=definition,
+        engine=engine,
+    )
+    return ExplanationProfileRegistry(profiles=(profile,))
+
+
+def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:
+    """Builds the evaluation registry."""
+    engine = RuleBasedEvaluator()
+    definition = RuleBasedEvaluationDefinition()
+    profile = EvaluationProfile(
+        profile_id="default_evaluation",
+        definition=definition,
+        engine=engine,
+    )
+    return EvaluationProfileRegistry(profiles=(profile,))
+
+
+def build_pipeline(config: AppConfig) -> ArbiterPipeline:
+    """Builds the full Arbiter Pipeline."""
+    return ArbiterPipeline(
+        retrieval_registry=build_retrieval_registry(config),
+        verification_registry=build_verification_registry(config),
+        failure_analysis_registry=build_failure_analysis_registry(config),
+        uncertainty_registry=build_uncertainty_registry(config),
+        decision_registry=build_decision_registry(config),
+        explanation_registry=build_explanation_registry(config),
+        evaluation_registry=build_evaluation_registry(config),
+    )
