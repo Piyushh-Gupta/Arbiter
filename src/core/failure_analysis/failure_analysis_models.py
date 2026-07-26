@@ -1,8 +1,19 @@
 """Immutable domain models for the Failure Analysis subsystem."""
 
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+
+from src.core.exceptions import (
+    DuplicateFailureAnalysisProfileError,
+    FailureAnalysisProfileNotFoundError,
+)
+
+if TYPE_CHECKING:
+    from src.core.failure_analysis.base import BaseFailureAnalyzer
+else:
+    BaseFailureAnalyzer = Any
 
 from src.core.verification.verification_models import VerificationResult
 
@@ -123,3 +134,81 @@ class ContradictionAnalysisDefinition(FailureAnalysisDefinition):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class FailureAnalysisProfile(BaseModel):
+    """
+    Immutable pairing of a failure analysis definition and its compatible analyzer.
+    """
+
+    profile_id: str = Field(
+        ...,
+        description="Unique identifier for this failure analysis profile.",
+    )
+    definition: FailureAnalysisDefinition = Field(
+        ...,
+        description="The strictly immutable configuration for this failure analysis strategy.",
+    )
+    analyzer: BaseFailureAnalyzer = Field(
+        ...,
+        description="The stateless executable strategy resolving the definition.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "FailureAnalysisProfile":
+        """Front-loads compatibility validation at profile construction."""
+        self.analyzer.validate_compatibility(self.definition)
+        return self
+
+
+class FailureAnalysisProfileRegistry(BaseModel):
+    """
+    Immutable registry for managing failure analysis profiles.
+    """
+
+    profiles: tuple[FailureAnalysisProfile, ...] = Field(
+        ...,
+        min_length=1,
+        description="The abstract collection of registered failure analysis profiles.",
+    )
+
+    _profile_index: dict[str, FailureAnalysisProfile] = PrivateAttr(
+        default_factory=dict
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "FailureAnalysisProfileRegistry":
+        index: dict[str, FailureAnalysisProfile] = {}
+        for profile in self.profiles:
+            if profile.profile_id in index:
+                raise DuplicateFailureAnalysisProfileError(
+                    f"Duplicate profile_id detected: {profile.profile_id}"
+                )
+            index[profile.profile_id] = profile
+
+        # Bypass frozen constraint for private attribute initialization
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> FailureAnalysisProfile:
+        """
+        Resolves a profile statelessly in O(1) time.
+
+        Args:
+            profile_id: The requested profile identifier.
+
+        Returns:
+            FailureAnalysisProfile: The fully resolved and validated profile.
+
+        Raises:
+            FailureAnalysisProfileNotFoundError: If the profile_id is not registered.
+        """
+        if profile_id not in self._profile_index:
+            raise FailureAnalysisProfileNotFoundError(
+                f"Failure analysis profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]

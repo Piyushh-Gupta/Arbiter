@@ -321,3 +321,11 @@ class FailureAnalysisConfigurationError(ArbiterError):
 
 class FailureAnalysisExecutionError(ArbiterError):
     """Raised when a failure analyzer encounters a runtime failure."""
+
+
+class DuplicateFailureAnalysisProfileError(ArbiterError):
+    """Raised when a FailureAnalysisProfileRegistry encounters a duplicate profile_id."""
+
+
+class FailureAnalysisProfileNotFoundError(ArbiterError):
+    """Raised when a failure analysis profile cannot be resolved from the registry."""
