@@ -79,6 +79,9 @@
 - [x] M14.2 Rule-Based Evaluator
 - [x] M14.3 Evaluation Profiles
 
+## M15 Orchestration Subsystem
+- [x] M15.1 Pipeline Orchestrator
+
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
 - [ ] Dataset Generation Scripts
