@@ -54,3 +54,22 @@ class DecisionResult(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
+
+
+class ThresholdDecisionDefinition(DecisionDefinition):
+    """Configuration for threshold-based decision routing."""
+
+    accept_max_uncertainty: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Maximum allowed uncertainty score to ACCEPT a supported claim.",
+    )
+    reject_max_uncertainty: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Maximum allowed uncertainty score to REJECT a refuted claim.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
