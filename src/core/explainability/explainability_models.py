@@ -59,3 +59,9 @@ class ExplanationResult(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
+
+
+class RuleBasedExplanationDefinition(ExplanationDefinition):
+    """Configuration for the deterministic rule-based explainer."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
