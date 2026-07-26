@@ -1,7 +1,7 @@
 """Immutable domain models for the Uncertainty Estimation subsystem."""
 
-from typing import TYPE_CHECKING, Any
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
