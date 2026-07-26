@@ -84,6 +84,7 @@
 - [x] M15.2 FastAPI API Layer
 - [x] M15.3 Dependency Injection & Configuration
 - [x] M15.4 End-to-End Integration Tests
+- [x] M15.5 Production Readiness
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)

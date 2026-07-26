@@ -1,5 +1,7 @@
 """Centralized configuration system using Pydantic Settings."""
 
+from typing import Literal, cast
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,7 +40,9 @@ class Settings(BaseSettings):
     """Root application settings."""
 
     app_name: str = Field(default=APP_NAME)
-    environment: str = Field(default=DEFAULT_ENV)
+    environment: Literal["development", "production", "test"] = Field(
+        default=cast(Literal["development", "production", "test"], DEFAULT_ENV)
+    )
 
     # Sub-configurations
     dataset: ActiveDatasetSettings = ActiveDatasetSettings()

@@ -8,12 +8,28 @@ from pydantic import ValidationError
 from src.core.config import Settings
 
 
-def test_health_endpoint(app: FastAPI) -> None:
-    """Verifies the health check endpoint returns 200 OK."""
+def test_liveness_endpoint(app: FastAPI) -> None:
+    """Verifies the liveness check endpoint returns 200 OK."""
     with TestClient(app) as client:
-        response = client.get("/health")
+        response = client.get("/health/live")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        assert response.json() == {"status": "alive"}
+
+
+def test_readiness_endpoint(app: FastAPI) -> None:
+    """Verifies the readiness check endpoint returns 200 OK only when initialized."""
+    # Without TestClient context (lifespan not triggered), it should return 503
+    uninitialized_client = TestClient(app)
+    app.state.pipeline = None  # Ensure it's not somehow lingering
+    response_503 = uninitialized_client.get("/health/ready")
+    assert response_503.status_code == 503
+    assert response_503.json() == {"status": "not_ready"}
+
+    # With lifespan triggered, it should return 200
+    with TestClient(app) as client:
+        response_200 = client.get("/health/ready")
+        assert response_200.status_code == 200
+        assert response_200.json() == {"status": "ready"}
 
 
 def test_successful_pipeline_execution(
@@ -83,6 +99,24 @@ def test_exception_translation(
         data = response.json()
         assert "detail" in data
         assert "non_existent_profile" in data["detail"]
+
+
+def test_unexpected_exception_translation(app: FastAPI) -> None:
+    """
+    Verifies that unhandled generic Exceptions are masked as 500s
+    without leaking internal stack traces.
+    """
+
+    @app.get("/trigger_500")
+    def trigger_500() -> None:
+        raise ValueError("Secret database credentials leaked!")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/trigger_500")
+        assert response.status_code == 500
+        data = response.json()
+        assert data == {"detail": "Internal Server Error"}
+        assert "Secret" not in str(response.content)
 
 
 def test_startup_configuration_failure(monkeypatch: pytest.MonkeyPatch) -> None:

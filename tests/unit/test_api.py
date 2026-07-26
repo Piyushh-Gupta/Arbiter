@@ -40,10 +40,16 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_health_check(client: TestClient) -> None:
-    response = client.get("/health")
+def test_health_check_live(client: TestClient) -> None:
+    response = client.get("/health/live")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "alive"}
+
+
+def test_health_check_ready(client: TestClient) -> None:
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
 
 
 def test_successful_evaluation(client: TestClient) -> None:

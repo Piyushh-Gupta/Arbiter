@@ -38,7 +38,8 @@ def test_validate_paths_valid() -> None:
 def test_initialize_application() -> None:
     """Test that bootstrap runs without errors and creates required directories."""
     # Ensure it creates the directories and validates without raising
-    initialize_application()
+    config = Settings()
+    initialize_application(config)
     for directory in ProjectPaths.get_all_required_dirs():
         assert directory.exists()
         assert directory.is_dir()

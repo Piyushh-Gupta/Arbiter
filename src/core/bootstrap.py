@@ -1,5 +1,7 @@
 """Application bootstrap and initialization routines."""
 
+import logging
+import sys
 from typing import Sequence
 
 from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
@@ -79,15 +81,35 @@ def _create_required_directories() -> None:
         directory.mkdir(parents=True, exist_ok=True)
 
 
-def initialize_application() -> None:
+def _configure_logging(config: AppConfig) -> None:
+    """Configures structured application logging."""
+    # Enforce basic configuration with infrastructure focus
+    log_format = (
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        if config.environment == "development"
+        else '{"time": "%(asctime)s", "level": "%(levelname)s", "name": "%(name)s", "message": "%(message)s"}'
+    )
+    logging.basicConfig(
+        level=config.log.level,
+        format=log_format,
+        handlers=[logging.StreamHandler(sys.stdout)],
+        force=True,
+    )
+
+
+def initialize_application(config: AppConfig) -> None:
     """
     Execute the startup orchestration routine.
 
     This function should be called at the very beginning of the application lifecycle.
-    It coordinates directory creation and system validation.
+    It coordinates directory creation, logging setup, and system validation.
     """
+    _configure_logging(config)
     _create_required_directories()
     validate_startup()
+
+    logger = logging.getLogger("arbiter.bootstrap")
+    logger.info("Application bootstrap completed successfully.")
 
 
 def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
