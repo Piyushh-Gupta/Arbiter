@@ -55,3 +55,15 @@ class VerificationDefinition(BaseModel):
     """Base immutable configuration for a verification strategy."""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class NLIVerificationDefinition(VerificationDefinition):
+    """Immutable configuration for an NLI verification invocation."""
+
+    top_k: int = Field(
+        ...,
+        gt=0,
+        description="Maximum number of passages to evaluate from the bundle.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
