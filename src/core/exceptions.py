@@ -377,3 +377,11 @@ class DuplicateExplanationProfileError(ArbiterError):
 
 class ExplanationProfileNotFoundError(ArbiterError):
     """Raised when an explanation profile cannot be resolved from the registry."""
+
+
+class EvaluationConfigurationError(ArbiterError):
+    """Raised when an evaluator configuration is invalid."""
+
+
+class EvaluationExecutionError(ArbiterError):
+    """Raised when an evaluator encounters a runtime failure."""

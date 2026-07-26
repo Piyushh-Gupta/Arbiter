@@ -74,6 +74,9 @@
 - [x] M13.2 Rule-Based Explainer
 - [x] M13.3 Explainability Profiles
 
+## M14 Evaluation Subsystem
+- [x] M14.1 Evaluation Framework
+
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
 - [ ] Dataset Generation Scripts
