@@ -1,13 +1,23 @@
 """Immutable domain models for the Uncertainty Estimation subsystem."""
 
+from typing import TYPE_CHECKING, Any
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
+from src.core.exceptions import (
+    DuplicateUncertaintyProfileError,
+    UncertaintyProfileNotFoundError,
+)
 from src.core.failure_analysis.failure_analysis_models import (
     FailureAnalysisResult,
     FailureSeverity,
 )
+
+if TYPE_CHECKING:
+    from src.core.uncertainty.base import BaseUncertaintyEstimator
+else:
+    BaseUncertaintyEstimator = Any
 
 
 class UncertaintyLevel(str, Enum):
@@ -148,3 +158,71 @@ class FailureAwareUncertaintyDefinition(ConfidenceUncertaintyDefinition):
             if not (0.0 <= pen <= 1.0):
                 raise ValueError(f"Flag penalty for {flag} must be in [0.0, 1.0].")
         return self
+
+
+class UncertaintyProfile(BaseModel):
+    """
+    Immutable pairing of an uncertainty estimation definition and its compatible strategy.
+    """
+
+    profile_id: str = Field(
+        ...,
+        description="Unique identifier for this uncertainty profile.",
+    )
+    definition: UncertaintyDefinition = Field(
+        ...,
+        description="The strictly immutable configuration for this uncertainty strategy.",
+    )
+    estimator: BaseUncertaintyEstimator = Field(
+        ...,
+        description="The stateless executable strategy resolving the definition.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "UncertaintyProfile":
+        """Front-loads compatibility validation at profile construction."""
+        self.estimator.validate_compatibility(self.definition)
+        return self
+
+
+class UncertaintyProfileRegistry(BaseModel):
+    """
+    Immutable registry for managing uncertainty profiles.
+    """
+
+    profiles: tuple[UncertaintyProfile, ...] = Field(
+        ...,
+        min_length=1,
+        description="The abstract collection of registered uncertainty profiles.",
+    )
+
+    _profile_index: dict[str, UncertaintyProfile] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "UncertaintyProfileRegistry":
+        """Builds an O(1) lookup index and statically detects duplicate profile IDs."""
+        index: dict[str, UncertaintyProfile] = {}
+        for profile in self.profiles:
+            if profile.profile_id in index:
+                raise DuplicateUncertaintyProfileError(
+                    f"Duplicate profile_id detected: {profile.profile_id}"
+                )
+            index[profile.profile_id] = profile
+
+        # Bypass frozen constraint to set the private index
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> UncertaintyProfile:
+        """
+        Resolves a profile statelessly in O(1) time.
+        """
+        if profile_id not in self._profile_index:
+            raise UncertaintyProfileNotFoundError(
+                f"Uncertainty profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]

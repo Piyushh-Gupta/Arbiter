@@ -337,3 +337,11 @@ class UncertaintyConfigurationError(ArbiterError):
 
 class UncertaintyExecutionError(ArbiterError):
     """Raised when an uncertainty estimator encounters a runtime failure."""
+
+
+class DuplicateUncertaintyProfileError(ArbiterError):
+    """Raised when an UncertaintyProfileRegistry encounters a duplicate profile_id."""
+
+
+class UncertaintyProfileNotFoundError(ArbiterError):
+    """Raised when an uncertainty profile cannot be resolved from the registry."""
