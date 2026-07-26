@@ -385,3 +385,11 @@ class EvaluationConfigurationError(ArbiterError):
 
 class EvaluationExecutionError(ArbiterError):
     """Raised when an evaluator encounters a runtime failure."""
+
+
+class DuplicateEvaluationProfileError(ArbiterError):
+    """Raised when an EvaluationProfileRegistry encounters a duplicate profile_id."""
+
+
+class EvaluationProfileNotFoundError(ArbiterError):
+    """Raised when an evaluation profile cannot be resolved from the registry."""
