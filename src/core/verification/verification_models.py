@@ -11,7 +11,7 @@ else:
     BaseVerifier = Any
 
 
-from src.core.retrieval.retrieval_models import EvidenceBundle
+from src.core.retrieval.retrieval_models import EvidenceBundle, EvidencePassage
 
 
 class VerificationLabel(str, Enum):
@@ -20,6 +20,24 @@ class VerificationLabel(str, Enum):
     SUPPORTS = "SUPPORTS"
     REFUTES = "REFUTES"
     NOT_ENOUGH_INFO = "NOT_ENOUGH_INFO"
+
+
+class VerifiedPassage(BaseModel):
+    """Immutable binding of an EvidencePassage to its per-passage verification semantics."""
+
+    passage: EvidencePassage = Field(
+        ...,
+        description="The immutable source evidence passage.",
+    )
+    label: VerificationLabel = Field(
+        ...,
+        description="The winning discrete verification label for this passage alone.",
+    )
+    supports_score: float = Field(..., ge=0.0, le=1.0)
+    refutes_score: float = Field(..., ge=0.0, le=1.0)
+    not_enough_info_score: float = Field(..., ge=0.0, le=1.0)
+
+    model_config = ConfigDict(frozen=True)
 
 
 class VerificationMetadata(BaseModel):
@@ -49,6 +67,10 @@ class VerificationResult(BaseModel):
     evidence_bundle: EvidenceBundle = Field(
         ...,
         description="The immutable, originating bundle of evidence passages.",
+    )
+    verified_passages: tuple[VerifiedPassage, ...] | None = Field(
+        default=None,
+        description="Optional rich per-passage verification semantics. Present if the verifier supports it.",
     )
     metadata: VerificationMetadata = Field(
         ...,

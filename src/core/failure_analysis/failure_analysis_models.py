@@ -110,3 +110,16 @@ class VerificationFailureAnalysisDefinition(FailureAnalysisDefinition):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class ContradictionAnalysisDefinition(FailureAnalysisDefinition):
+    """Configuration for contradiction failure analysis."""
+
+    min_passage_label_confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence a passage label must achieve to be counted as supporting or refuting.",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)

@@ -7,6 +7,7 @@ from src.core.verification.verification_models import (
 )
 
 from .failure_analysis_models import (
+    ContradictionAnalysisDefinition,
     FailureAnalysisDefinition,
     FailureAnalysisResult,
     FailureFlag,
@@ -232,4 +233,84 @@ class VerificationFailureAnalyzer:
             severity=final_severity,
             verification_result=verification_result,
             metadata=FailureMetadata(strategy_id="verification_failure_analyzer"),
+        )
+
+
+class ContradictionAnalyzer:
+    """
+    Analyzes verified_passages for evidence contradiction.
+    Stateless and algorithmic; requires no external dependencies.
+    """
+
+    def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
+        """Validates that the definition is a ContradictionAnalysisDefinition."""
+        if not isinstance(definition, ContradictionAnalysisDefinition):
+            raise FailureAnalysisConfigurationError(
+                f"ContradictionAnalyzer requires ContradictionAnalysisDefinition, got {type(definition).__name__}"
+            )
+
+    def analyze(
+        self,
+        claim: str,
+        verification_result: VerificationResult,
+        definition: FailureAnalysisDefinition,
+    ) -> FailureAnalysisResult:
+        """
+        Executes contradiction failure analysis.
+        """
+        if not isinstance(definition, ContradictionAnalysisDefinition):
+            raise FailureAnalysisConfigurationError(
+                f"ContradictionAnalyzer requires ContradictionAnalysisDefinition, got {type(definition).__name__}"
+            )
+
+        if verification_result.verified_passages is None:
+            return FailureAnalysisResult(
+                failure_flags=frozenset(),
+                severity=FailureSeverity.NONE,
+                verification_result=verification_result,
+                metadata=FailureMetadata(strategy_id="contradiction_analyzer"),
+            )
+
+        n_supporting = 0
+        n_refuting = 0
+
+        for verified_passage in verification_result.verified_passages:
+            if (
+                verified_passage.label == VerificationLabel.SUPPORTS
+                and verified_passage.supports_score
+                >= definition.min_passage_label_confidence
+            ):
+                n_supporting += 1
+            elif (
+                verified_passage.label == VerificationLabel.REFUTES
+                and verified_passage.refutes_score
+                >= definition.min_passage_label_confidence
+            ):
+                n_refuting += 1
+
+        flags: list[tuple[FailureFlag, FailureSeverity]] = []
+
+        if n_supporting > 0 and n_refuting > 0:
+            flags.append(
+                (
+                    FailureFlag(
+                        code="CONTRADICTORY_EVIDENCE",
+                        description="Supporting and refuting passages both present above confidence threshold.",
+                    ),
+                    FailureSeverity.MEDIUM,
+                )
+            )
+
+        final_severity = FailureSeverity.NONE
+        if flags:
+            # We know it's just one flag in this current version, but keeping it general
+            final_severity = FailureSeverity.MEDIUM
+
+        failure_flags = frozenset(flag for flag, _ in flags)
+
+        return FailureAnalysisResult(
+            failure_flags=failure_flags,
+            severity=final_severity,
+            verification_result=verification_result,
+            metadata=FailureMetadata(strategy_id="contradiction_analyzer"),
         )

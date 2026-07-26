@@ -142,6 +142,7 @@ def test_empty_bundle_fast_path() -> None:
     assert result.label == VerificationLabel.NOT_ENOUGH_INFO
     assert result.confidence is None
     assert result.evidence_bundle is empty_bundle
+    assert result.verified_passages is None
     assert model.called_with_passages is None  # predict not called
 
 
@@ -187,6 +188,24 @@ def test_max_pooling_aggregation_and_label_mapping(
     assert result.label == VerificationLabel.REFUTES
     assert result.confidence == 0.9
     assert result.evidence_bundle is dummy_bundle
+
+    # Check verified passages
+    assert result.verified_passages is not None
+    assert len(result.verified_passages) == 3
+
+    vp1 = result.verified_passages[0]
+    assert vp1.label == VerificationLabel.REFUTES
+    assert vp1.refutes_score == 0.9
+    assert vp1.not_enough_info_score == 0.1
+    assert vp1.supports_score == 0.0
+
+    vp2 = result.verified_passages[1]
+    assert vp2.label == VerificationLabel.SUPPORTS
+    assert vp2.supports_score == 0.8
+
+    vp3 = result.verified_passages[2]
+    assert vp3.label == VerificationLabel.NOT_ENOUGH_INFO
+    assert vp3.not_enough_info_score == 0.7
 
 
 def test_tie_breaking(dummy_bundle: EvidenceBundle) -> None:

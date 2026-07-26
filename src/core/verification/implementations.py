@@ -14,6 +14,7 @@ from src.core.verification.verification_models import (
     VerificationLabel,
     VerificationMetadata,
     VerificationResult,
+    VerifiedPassage,
 )
 
 
@@ -117,13 +118,37 @@ class NLIVerifier:
         max_refutes = -1.0
         max_nei = -1.0
 
-        for triplet in raw_predictions:
+        verified_passages: list[VerifiedPassage] = []
+
+        for passage, triplet in zip(passages_to_score, raw_predictions):
+            p_supports = float(max(0.0, min(1.0, triplet[idx_supports])))
+            p_refutes = float(max(0.0, min(1.0, triplet[idx_refutes])))
+            p_nei = float(max(0.0, min(1.0, triplet[idx_nei])))
+
             if triplet[idx_supports] > max_supports:
                 max_supports = triplet[idx_supports]
             if triplet[idx_refutes] > max_refutes:
                 max_refutes = triplet[idx_refutes]
             if triplet[idx_nei] > max_nei:
                 max_nei = triplet[idx_nei]
+
+            # Determine passage-level winning label
+            if p_supports >= p_refutes and p_supports >= p_nei:
+                p_winning_label = VerificationLabel.SUPPORTS
+            elif p_refutes > p_supports and p_refutes >= p_nei:
+                p_winning_label = VerificationLabel.REFUTES
+            else:
+                p_winning_label = VerificationLabel.NOT_ENOUGH_INFO
+
+            verified_passages.append(
+                VerifiedPassage(
+                    passage=passage,
+                    label=p_winning_label,
+                    supports_score=p_supports,
+                    refutes_score=p_refutes,
+                    not_enough_info_score=p_nei,
+                )
+            )
 
         # Tie-breaking logic: SUPPORTS > REFUTES > NOT_ENOUGH_INFO
         if max_supports >= max_refutes and max_supports >= max_nei:
@@ -143,5 +168,6 @@ class NLIVerifier:
             label=winning_label,
             confidence=winning_confidence,
             evidence_bundle=bundle,
+            verified_passages=tuple(verified_passages),
             metadata=VerificationMetadata(strategy_id=self._strategy_id),
         )

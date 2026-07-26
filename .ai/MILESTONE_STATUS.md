@@ -56,6 +56,7 @@
 - [x] M10.1 Failure Analysis Framework
 - [x] M10.2 Retrieval Failure Detector
 - [x] M10.3 Verification Failure Detector
+- [x] M10.4 Contradiction Analyzer
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
