@@ -34,6 +34,12 @@ class EvaluationDefinition(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class RuleBasedEvaluationDefinition(EvaluationDefinition):
+    """Configuration for the deterministic rule-based evaluator."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 class EvaluationMetadata(BaseModel):
     """Minimal immutable execution provenance attached to each EvaluationResult."""
 

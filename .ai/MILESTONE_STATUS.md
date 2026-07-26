@@ -76,6 +76,7 @@
 
 ## M14 Evaluation Subsystem
 - [x] M14.1 Evaluation Framework
+- [x] M14.2 Rule-Based Evaluator
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
