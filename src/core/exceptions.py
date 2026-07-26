@@ -305,3 +305,11 @@ class VerificationConfigurationError(ArbiterError):
 
 class VerificationExecutionError(ArbiterError):
     """Raised when a verifier encounters a runtime failure."""
+
+
+class DuplicateVerificationProfileError(ArbiterError):
+    """Raised when a VerificationProfileRegistry encounters a duplicate profile_id."""
+
+
+class VerificationProfileNotFoundError(ArbiterError):
+    """Raised when a verification profile cannot be resolved from the registry."""

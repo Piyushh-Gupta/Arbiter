@@ -52,6 +52,7 @@
 - [x] M8.6 Retrieval Profiles
 - [x] M9.1 Verification Framework
 - [x] M9.2 Natural Language Inference Verifier
+- [x] M9.3 Verification Profiles
 
 ## Future Milestones
 - [ ] Component Implementations (ASR, Extractor, Retriever, Verifier, Triage)
