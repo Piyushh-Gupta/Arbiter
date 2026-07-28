@@ -61,7 +61,11 @@ def build(corpus_path: str, output_dir: str, encoder_module: str = "dummy") -> N
     texts = [c.text for c in chunks]
     embeddings = pipeline._encoder.encode_batch(texts) if texts else None
 
-    from src.core.indexing.models import ArtifactLocation, EmbeddingModelMetadata, IndexManifest
+    from src.core.indexing.models import (
+        ArtifactLocation,
+        EmbeddingModelMetadata,
+        IndexManifest,
+    )
 
     artifacts = {}
     for builder in pipeline._builders:

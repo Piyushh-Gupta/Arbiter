@@ -54,7 +54,6 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-
 class EmbeddingModelMetadata(BaseModel):
     """Immutable metadata describing the embedding model used for dense retrieval."""
 

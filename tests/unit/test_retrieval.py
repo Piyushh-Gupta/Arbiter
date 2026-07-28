@@ -11,9 +11,9 @@ from src.core.retrieval.base import BaseRetriever, QueryEncoder
 from src.core.retrieval.implementations import DenseRetriever, HybridRetriever
 from src.core.retrieval.retrieval_models import (
     CorpusEntry,
+    DenseRetrievalDefinition,
     EvidenceBundle,
     EvidencePassage,
-    DenseRetrievalDefinition,
     HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,

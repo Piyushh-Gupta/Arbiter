@@ -37,7 +37,9 @@ class SentenceTransformerQueryEncoder(QueryEncoder):
         self._model = SentenceTransformer(self._model_id, device=self._device)
         dim = self._model.get_sentence_embedding_dimension()
         if dim is None:
-            raise RetrievalConfigurationError(f"Could not determine dimension for {model_id}")
+            raise RetrievalConfigurationError(
+                f"Could not determine dimension for {model_id}"
+            )
         self._dimension: int = dim
         self._pooling_strategy = "mean"
         self._normalization_strategy = "l2" if normalize_embeddings else "none"
@@ -46,11 +48,11 @@ class SentenceTransformerQueryEncoder(QueryEncoder):
     @property
     def pooling_strategy(self) -> str:
         return self._pooling_strategy
-        
+
     @property
     def normalization_strategy(self) -> str:
         return self._normalization_strategy
-        
+
     @property
     def model_revision(self) -> str | None:
         return self._model_revision
@@ -97,7 +99,7 @@ class FAISSVectorStore(BaseVectorStore):
             raise RetrievalExecutionError(
                 f"FAISS index dimension {self._index.d} does not match manifest {expected_dim}"
             )
-            
+
         if self._index.ntotal != len(self._span_ids):
             raise RetrievalExecutionError(
                 f"FAISS index size {self._index.ntotal} does not match span_ids length {len(self._span_ids)}"
@@ -143,7 +145,7 @@ class DenseCandidateGenerator(BaseCandidateGenerator):
             )
 
         query_embedding = self._query_encoder.encode(claim)
-        
+
         # We query for more if there is a threshold, but FAISS requires a k.
         # However, to be perfectly safe, we query the exact top_k requested, because min_score is just a filter.
         # Wait, if we filter, we might return fewer than top_k. But we can't search for "all above threshold" efficiently without a dynamic k.
@@ -152,9 +154,7 @@ class DenseCandidateGenerator(BaseCandidateGenerator):
 
         # Apply min_score threshold if present
         if definition.min_score is not None:
-            candidates = tuple(
-                c for c in candidates if c.score >= definition.min_score
-            )
+            candidates = tuple(c for c in candidates if c.score >= definition.min_score)
 
         # Sort deterministically:
         # 1. descending score

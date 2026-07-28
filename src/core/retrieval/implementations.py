@@ -9,9 +9,9 @@ from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionE
 from src.core.retrieval.base import BaseRetriever, QueryEncoder
 from src.core.retrieval.retrieval_models import (
     CorpusEntry,
+    DenseRetrievalDefinition,
     EvidenceBundle,
     EvidencePassage,
-    DenseRetrievalDefinition,
     HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
@@ -78,10 +78,7 @@ class DenseRetriever(BaseRetriever):
                 score = float(flat_distances[i])
 
                 # Apply score threshold if defined
-                if (
-                    definition.min_score is not None
-                    and score < definition.min_score
-                ):
+                if definition.min_score is not None and score < definition.min_score:
                     continue
 
                 entry = self._corpus[idx]

@@ -122,14 +122,12 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         WhitespaceTokenizer,
     )
     from src.core.retrieval.dense import (
-        SentenceTransformerQueryEncoder,
-        FAISSVectorStore,
         DenseCandidateGenerator,
         DenseRetriever,
+        FAISSVectorStore,
+        SentenceTransformerQueryEncoder,
     )
-    from src.core.retrieval.retrieval_models import (
-        DenseRetrievalDefinition,
-    )
+    from src.core.retrieval.retrieval_models import DenseRetrievalDefinition
 
     manifest_path = ProjectPaths.DATA_INDEX / "index_manifest.json"
     if not manifest_path.exists():
@@ -142,7 +140,11 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         raise RetrievalConfigurationError(f"Invalid manifest: {e}")
 
     # For C1.4 we require sparse_index and metadata artifacts
-    if "sparse_index" not in manifest.artifacts or "metadata" not in manifest.artifacts or "dense_index" not in manifest.artifacts:
+    if (
+        "sparse_index" not in manifest.artifacts
+        or "metadata" not in manifest.artifacts
+        or "dense_index" not in manifest.artifacts
+    ):
         raise RetrievalConfigurationError(
             "Manifest missing required sparse_index, dense_index or metadata artifacts."
         )
@@ -201,7 +203,10 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         raise RetrievalConfigurationError(f"Missing FAISS artifact at {dense_path}")
 
     # Validate embedding metadata
-    if not hasattr(manifest, "embedding_metadata") or manifest.embedding_metadata is None:
+    if (
+        not hasattr(manifest, "embedding_metadata")
+        or manifest.embedding_metadata is None
+    ):
         raise RetrievalConfigurationError("Manifest missing embedding_metadata.")
 
     # Initialize Dense Components
@@ -210,9 +215,14 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         model_id=manifest.embedding_metadata.model_id,
         device="cpu",
     )
-    
-    if query_encoder.embedding_dimension != manifest.embedding_metadata.embedding_dimension:
-        raise RetrievalConfigurationError("Encoder embedding dimension does not match manifest.")
+
+    if (
+        query_encoder.embedding_dimension
+        != manifest.embedding_metadata.embedding_dimension
+    ):
+        raise RetrievalConfigurationError(
+            "Encoder embedding dimension does not match manifest."
+        )
 
     faiss_store = FAISSVectorStore(
         index_path=dense_path,

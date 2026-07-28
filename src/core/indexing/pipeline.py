@@ -100,7 +100,11 @@ class IndexingPipeline:
         texts = [c.text for c in chunks]
         embeddings = self._encoder.encode_batch(texts) if texts else None
 
-        from src.core.indexing.models import ArtifactLocation, EmbeddingModelMetadata, IndexManifest
+        from src.core.indexing.models import (
+            ArtifactLocation,
+            EmbeddingModelMetadata,
+            IndexManifest,
+        )
 
         artifacts = {}
         for builder in self._builders:
