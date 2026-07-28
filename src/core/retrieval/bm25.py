@@ -45,7 +45,9 @@ class MetadataDocumentStore(DocumentStore):
 
     def get_chunk(self, span_id: str) -> Chunk:
         if span_id not in self._chunks:
-            raise RetrievalExecutionError(f"Chunk with span_id {span_id} not found in store.")
+            raise RetrievalExecutionError(
+                f"Chunk with span_id {span_id} not found in store."
+            )
         return self._chunks[span_id]
 
 
@@ -84,9 +86,7 @@ class BM25CandidateGenerator(BaseCandidateGenerator):
 
         # Pair scores with original corpus index to preserve stable corpus ordering during tie-breaking.
         # We sort by: 1) Score descending, 2) Corpus index ascending.
-        scored_items = [
-            (float(score), idx) for idx, score in enumerate(scores)
-        ]
+        scored_items = [(float(score), idx) for idx, score in enumerate(scores)]
 
         if definition.min_score is not None:
             scored_items = [
@@ -169,4 +169,6 @@ class BM25Retriever(BaseRetriever):
         except Exception as e:
             if isinstance(e, (RetrievalExecutionError, RetrievalConfigurationError)):
                 raise
-            raise RetrievalExecutionError(f"BM25 retrieval execution failed: {e}") from e
+            raise RetrievalExecutionError(
+                f"BM25 retrieval execution failed: {e}"
+            ) from e

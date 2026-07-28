@@ -4,7 +4,6 @@ import logging
 import sys
 from typing import Sequence
 
-
 from src.core.config import Settings
 from src.core.decision.decision_models import (
     DecisionProfile,
@@ -135,7 +134,9 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
 
     # For C1.4 we require sparse_index and metadata artifacts
     if "sparse_index" not in manifest.artifacts or "metadata" not in manifest.artifacts:
-        raise RetrievalConfigurationError("Manifest missing required sparse_index or metadata artifacts.")
+        raise RetrievalConfigurationError(
+            "Manifest missing required sparse_index or metadata artifacts."
+        )
 
     sparse_path = manifest.artifacts["sparse_index"].path
     metadata_path = manifest.artifacts["metadata"].path
@@ -143,7 +144,9 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
     if not os.path.exists(sparse_path):
         raise RetrievalConfigurationError(f"Missing BM25 artifact at {sparse_path}")
     if not os.path.exists(metadata_path):
-        raise RetrievalConfigurationError(f"Missing metadata artifact at {metadata_path}")
+        raise RetrievalConfigurationError(
+            f"Missing metadata artifact at {metadata_path}"
+        )
 
     # Load BM25Okapi
     try:
@@ -158,13 +161,14 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
     ordered_span_ids = []
     with open(metadata_path, "r", encoding="utf-8") as f:
         import json
+
         for line in f:
             if line.strip():
                 chunk_data = json.loads(line)
                 ordered_span_ids.append(chunk_data["span_id"])
 
     tokenizer = WhitespaceTokenizer()
-    
+
     # We could theoretically checksum validate here again, but ManifestArtifactValidator
     # runs during validate_startup(). We rely on that for checksum validation.
 
@@ -173,9 +177,9 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         span_ids=ordered_span_ids,
         tokenizer=tokenizer,
     )
-    
+
     engine = BM25Retriever(generator=generator, document_store=document_store)
-    
+
     definition = BM25RetrievalDefinition(top_k=5)
     profile = RetrievalProfile(
         profile_id="default_retrieval",

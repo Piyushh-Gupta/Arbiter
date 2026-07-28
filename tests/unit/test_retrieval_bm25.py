@@ -1,9 +1,7 @@
-import json
 import os
 import shutil
 import tempfile
 import typing
-from pathlib import Path
 
 import pytest
 from rank_bm25 import BM25Okapi  # type: ignore
@@ -33,11 +31,51 @@ def temp_dir() -> typing.Generator[str, None, None]:
 def dummy_metadata_path(temp_dir: str) -> str:
     path = os.path.join(temp_dir, "metadata.jsonl")
     chunks = [
-        Chunk(span_id="doc1-0", document_id="doc1", text="hello world", start_char=0, end_char=11, dataset_version="1.0", metadata={}),
-        Chunk(span_id="doc2-0", document_id="doc2", text="hello arbiter", start_char=0, end_char=13, dataset_version="1.0", metadata={}),
-        Chunk(span_id="doc3-0", document_id="doc3", text="world of arbiter", start_char=0, end_char=16, dataset_version="1.0", metadata={}),
-        Chunk(span_id="doc4-0", document_id="doc4", text="unrelated document", start_char=0, end_char=18, dataset_version="1.0", metadata={}),
-        Chunk(span_id="doc5-0", document_id="doc5", text="another random text", start_char=0, end_char=19, dataset_version="1.0", metadata={}),
+        Chunk(
+            span_id="doc1-0",
+            document_id="doc1",
+            text="hello world",
+            start_char=0,
+            end_char=11,
+            dataset_version="1.0",
+            metadata={},
+        ),
+        Chunk(
+            span_id="doc2-0",
+            document_id="doc2",
+            text="hello arbiter",
+            start_char=0,
+            end_char=13,
+            dataset_version="1.0",
+            metadata={},
+        ),
+        Chunk(
+            span_id="doc3-0",
+            document_id="doc3",
+            text="world of arbiter",
+            start_char=0,
+            end_char=16,
+            dataset_version="1.0",
+            metadata={},
+        ),
+        Chunk(
+            span_id="doc4-0",
+            document_id="doc4",
+            text="unrelated document",
+            start_char=0,
+            end_char=18,
+            dataset_version="1.0",
+            metadata={},
+        ),
+        Chunk(
+            span_id="doc5-0",
+            document_id="doc5",
+            text="another random text",
+            start_char=0,
+            end_char=19,
+            dataset_version="1.0",
+            metadata={},
+        ),
     ]
     with open(path, "w", encoding="utf-8") as f:
         for c in chunks:
@@ -101,7 +139,7 @@ def test_bm25_retriever(dummy_bm25_index: BM25Okapi, dummy_metadata_path: str) -
     retriever = BM25Retriever(generator, store)
 
     definition = BM25RetrievalDefinition(top_k=2)
-    
+
     # validate compatibility
     retriever.validate_compatibility(definition)
     with pytest.raises(RetrievalConfigurationError):

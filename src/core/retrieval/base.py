@@ -1,5 +1,6 @@
 """Stateless base retriever protocol."""
 
+import typing
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -11,11 +12,9 @@ from src.core.retrieval.retrieval_models import (
     RetrievalDefinition,
 )
 
-
-import typing
-
 if typing.TYPE_CHECKING:
     from src.core.indexing.models import Chunk
+
 
 @runtime_checkable
 class BaseRetriever(Protocol):
@@ -167,10 +166,9 @@ class DocumentStore(Protocol):
     Resolves span_id to immutable Chunks.
     """
 
-    def get_chunk(self, span_id: str) -> "Chunk":  # type: ignore
+    def get_chunk(self, span_id: str) -> "Chunk":
         """
         Looks up a chunk by its exact span identifier.
         Raises RetrievalExecutionError if not found.
         """
         ...
-

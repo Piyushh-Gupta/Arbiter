@@ -1,9 +1,11 @@
 """Unit tests for the Evidence Retrieval subsystem framework."""
 
 from unittest.mock import MagicMock
+
 import faiss
 import numpy as np
 import pytest
+
 from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionError
 from src.core.retrieval.base import BaseRetriever, QueryEncoder
 from src.core.retrieval.implementations import FAISSRetriever, HybridRetriever
@@ -75,7 +77,7 @@ def test_retrieval_definition_immutability() -> None:
     """Test that RetrievalDefinition is strictly immutable."""
     definition = RetrievalDefinition()
     with pytest.raises(Exception):
-        definition.some_attr = "mutated"
+        definition.some_attr = "mutated"  # type: ignore[attr-defined]
 
 
 def test_retrieval_metadata_immutability(dummy_metadata: RetrievalMetadata) -> None:
@@ -308,6 +310,8 @@ def test_faiss_retriever_rejects_base_definition(
     definition = RetrievalDefinition()
     with pytest.raises(RetrievalConfigurationError):
         retriever.validate_compatibility(definition)
+
+
 def test_faiss_retriever_returns_top_k_passages(
     dummy_faiss_index: faiss.Index,
     dummy_corpus: tuple[CorpusEntry, ...],

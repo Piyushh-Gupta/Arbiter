@@ -28,7 +28,11 @@ def build(corpus_path: str, output_dir: str, encoder_module: str = "dummy") -> N
     loader = JSONLCorpusLoader()
     chunker = RecursiveDocumentChunker()
     tokenizer = WhitespaceTokenizer()
-    builders = [SparseIndexBuilder(tokenizer), DenseIndexBuilder(), MetadataIndexBuilder()]
+    builders = [
+        SparseIndexBuilder(tokenizer),
+        DenseIndexBuilder(),
+        MetadataIndexBuilder(),
+    ]
     writer = ManifestWriter()
 
     # We do a preliminary pass to get the dataset version if we wanted strict validation
