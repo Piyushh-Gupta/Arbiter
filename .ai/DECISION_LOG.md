@@ -83,3 +83,10 @@
 | Architecture | ADR-074: Retrieval Abstractions | Separate Candidate Generation, Online Query Encoding, and Offline Document Encoding into distinct interfaces to support hybrid scaling and decoupling from the FastAPI lifecycle. | Approved |
 | Architecture | ADR-075: Retrieval Candidate Abstraction | Candidate Generation now explicitly returns RetrievalCandidateSet. The VectorStore protocol returns RetrievalCandidate directly. EvidenceBundle construction belongs exclusively to orchestrating Retrievers. | Approved |
 | Architecture | ADR-076: Offline Indexing Framework | Adopted modular indexing pipeline with recursive chunking and external metadata persistence. | Approved |
+
+## C1.4 BM25 Retriever
+- Implemented BM25CandidateGenerator to wrap rank_bm25 deterministic execution.
+- Implemented BM25Retriever to orchestrate metadata retrieval.
+- Modified tests to use a 5-document dummy corpus to avoid rank_bm25 negative IDF issue.
+- Integrated WhitespaceTokenizer into indexing pipelines and candidate generation.
+

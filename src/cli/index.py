@@ -13,6 +13,7 @@ from src.core.indexing.models import IndexManifest
 from src.core.indexing.pipeline import IndexingPipeline
 from src.core.indexing.validators import ManifestArtifactValidator
 from src.core.indexing.writers import ManifestWriter
+from src.core.retrieval.bm25 import WhitespaceTokenizer
 
 
 def build(corpus_path: str, output_dir: str, encoder_module: str = "dummy") -> None:
@@ -26,7 +27,8 @@ def build(corpus_path: str, output_dir: str, encoder_module: str = "dummy") -> N
 
     loader = JSONLCorpusLoader()
     chunker = RecursiveDocumentChunker()
-    builders = [SparseIndexBuilder(), DenseIndexBuilder(), MetadataIndexBuilder()]
+    tokenizer = WhitespaceTokenizer()
+    builders = [SparseIndexBuilder(tokenizer), DenseIndexBuilder(), MetadataIndexBuilder()]
     writer = ManifestWriter()
 
     # We do a preliminary pass to get the dataset version if we wanted strict validation

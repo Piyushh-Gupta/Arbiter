@@ -51,7 +51,7 @@ class BM25RetrievalDefinition(RetrievalDefinition):
         gt=0,
         description="Maximum number of passages to return.",
     )
-    score_threshold: float | None = Field(
+    min_score: float | None = Field(
         default=None,
         description="Optional minimum BM25 score filter.",
     )

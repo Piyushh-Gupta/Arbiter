@@ -6,6 +6,7 @@ import numpy as np
 
 from src.core.indexing.models import Chunk
 from src.core.indexing.pipeline import IndexBuilder
+from src.core.retrieval.base import Tokenizer
 
 
 def _hash_file(path: str) -> str:
@@ -17,6 +18,9 @@ def _hash_file(path: str) -> str:
 
 
 class SparseIndexBuilder(IndexBuilder):
+    def __init__(self, tokenizer: "Tokenizer") -> None:
+        self._tokenizer = tokenizer
+
     @property
     def builder_id(self) -> str:
         return "sparse_index"
@@ -31,7 +35,7 @@ class SparseIndexBuilder(IndexBuilder):
 
         from rank_bm25 import BM25Okapi  # type: ignore
 
-        tokenized_corpus = [chunk.text.split(" ") for chunk in chunks]
+        tokenized_corpus = [self._tokenizer.tokenize(chunk.text) for chunk in chunks]
         bm25 = BM25Okapi(tokenized_corpus)
 
         output_path = os.path.join(output_dir, "bm25_index.pkl")

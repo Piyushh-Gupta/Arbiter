@@ -18,6 +18,7 @@ from src.core.indexing.models import ArtifactLocation, IndexManifest
 from src.core.indexing.pipeline import IndexingPipeline
 from src.core.indexing.validators import ManifestArtifactValidator
 from src.core.indexing.writers import ManifestWriter
+from src.core.retrieval.bm25 import WhitespaceTokenizer
 from tests.unit.test_retrieval_interfaces import DummyDocumentEncoder
 
 
@@ -68,7 +69,12 @@ def test_pipeline_execution(dummy_corpus: str, temp_dir: str) -> None:
     loader = JSONLCorpusLoader()
     chunker = RecursiveDocumentChunker(max_length=50, overlap=10)
     encoder = DummyDocumentEncoder()
-    builders = [SparseIndexBuilder(), DenseIndexBuilder(), MetadataIndexBuilder()]
+    tokenizer = WhitespaceTokenizer()
+    builders = [
+        SparseIndexBuilder(tokenizer),
+        DenseIndexBuilder(),
+        MetadataIndexBuilder(),
+    ]
     writer = ManifestWriter()
 
     version, _ = loader.load(dummy_corpus)
@@ -156,7 +162,12 @@ def test_pipeline_reproducibility(dummy_corpus: str, temp_dir: str) -> None:
     loader = JSONLCorpusLoader()
     chunker = RecursiveDocumentChunker()
     encoder = DummyDocumentEncoder()
-    builders = [SparseIndexBuilder(), DenseIndexBuilder(), MetadataIndexBuilder()]
+    tokenizer = WhitespaceTokenizer()
+    builders = [
+        SparseIndexBuilder(tokenizer),
+        DenseIndexBuilder(),
+        MetadataIndexBuilder(),
+    ]
     writer = ManifestWriter()
 
     version, _ = loader.load(dummy_corpus)

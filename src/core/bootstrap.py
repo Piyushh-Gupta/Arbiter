@@ -4,7 +4,6 @@ import logging
 import sys
 from typing import Sequence
 
-from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
 
 from src.core.config import Settings
 from src.core.decision.decision_models import (
@@ -33,10 +32,8 @@ from src.core.failure_analysis.failure_analysis_models import (
 from src.core.failure_analysis.implementations import VerificationFailureAnalyzer
 from src.core.paths import ProjectPaths
 from src.core.pipeline.orchestrator import ArbiterPipeline
-from src.core.retrieval.implementations import BM25Retriever
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
-    CorpusEntry,
     RetrievalProfile,
     RetrievalProfileRegistry,
 )
@@ -113,13 +110,72 @@ def initialize_application(config: AppConfig) -> None:
 
 
 def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
-    """Builds the retrieval registry."""
-    dummy_corpus = [CorpusEntry(document_id="dummy", span_id="dummy", text="dummy")]
-    dummy_index = BM25Okapi([["dummy"]])
+    """Builds the retrieval registry by loading offline-generated BM25 artifacts."""
+    import os
+    import pickle
 
-    engine = BM25Retriever(
-        index=dummy_index, corpus=dummy_corpus, tokenizer=lambda x: x.split()
+    from src.core.exceptions import RetrievalConfigurationError
+    from src.core.indexing.models import IndexManifest
+    from src.core.retrieval.bm25 import (
+        BM25CandidateGenerator,
+        BM25Retriever,
+        MetadataDocumentStore,
+        WhitespaceTokenizer,
     )
+
+    manifest_path = ProjectPaths.DATA_INDEX / "index_manifest.json"
+    if not manifest_path.exists():
+        raise RetrievalConfigurationError("Missing index_manifest.json.")
+
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = IndexManifest.model_validate_json(f.read())
+    except Exception as e:
+        raise RetrievalConfigurationError(f"Invalid manifest: {e}")
+
+    # For C1.4 we require sparse_index and metadata artifacts
+    if "sparse_index" not in manifest.artifacts or "metadata" not in manifest.artifacts:
+        raise RetrievalConfigurationError("Manifest missing required sparse_index or metadata artifacts.")
+
+    sparse_path = manifest.artifacts["sparse_index"].path
+    metadata_path = manifest.artifacts["metadata"].path
+
+    if not os.path.exists(sparse_path):
+        raise RetrievalConfigurationError(f"Missing BM25 artifact at {sparse_path}")
+    if not os.path.exists(metadata_path):
+        raise RetrievalConfigurationError(f"Missing metadata artifact at {metadata_path}")
+
+    # Load BM25Okapi
+    try:
+        with open(sparse_path, "rb") as f:
+            index = pickle.load(f)
+    except Exception as e:
+        raise RetrievalConfigurationError(f"Failed to load BM25 index: {e}")
+
+    # Load MetadataDocumentStore and extract ordered span_ids
+    # We must extract them sequentially to match the BM25 index order
+    document_store = MetadataDocumentStore(metadata_path)
+    ordered_span_ids = []
+    with open(metadata_path, "r", encoding="utf-8") as f:
+        import json
+        for line in f:
+            if line.strip():
+                chunk_data = json.loads(line)
+                ordered_span_ids.append(chunk_data["span_id"])
+
+    tokenizer = WhitespaceTokenizer()
+    
+    # We could theoretically checksum validate here again, but ManifestArtifactValidator
+    # runs during validate_startup(). We rely on that for checksum validation.
+
+    generator = BM25CandidateGenerator(
+        index=index,
+        span_ids=ordered_span_ids,
+        tokenizer=tokenizer,
+    )
+    
+    engine = BM25Retriever(generator=generator, document_store=document_store)
+    
     definition = BM25RetrievalDefinition(top_k=5)
     profile = RetrievalProfile(
         profile_id="default_retrieval",

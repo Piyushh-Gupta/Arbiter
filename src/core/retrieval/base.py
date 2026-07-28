@@ -12,6 +12,11 @@ from src.core.retrieval.retrieval_models import (
 )
 
 
+import typing
+
+if typing.TYPE_CHECKING:
+    from src.core.indexing.models import Chunk
+
 @runtime_checkable
 class BaseRetriever(Protocol):
     """Stateless protocol for all retrieval strategies."""
@@ -141,3 +146,31 @@ class IndexBuilder(Protocol):
         Ingests a corpus, chunks, encodes, and builds a vector index and metadata store.
         """
         ...
+
+
+@runtime_checkable
+class Tokenizer(Protocol):
+    """
+    Stateless protocol for query and document preprocessing and tokenization.
+    Guarantees consistency between index-time and query-time.
+    """
+
+    def tokenize(self, text: str) -> list[str]:
+        """Normalizes and tokenizes text into an ordered list of terms."""
+        ...
+
+
+@runtime_checkable
+class DocumentStore(Protocol):
+    """
+    Stateless protocol for document lookup and resolution.
+    Resolves span_id to immutable Chunks.
+    """
+
+    def get_chunk(self, span_id: str) -> "Chunk":  # type: ignore
+        """
+        Looks up a chunk by its exact span identifier.
+        Raises RetrievalExecutionError if not found.
+        """
+        ...
+
