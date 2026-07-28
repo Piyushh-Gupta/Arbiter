@@ -92,3 +92,6 @@
 - [ ] Training Pipelines
 - [ ] End-to-End Inference Pipeline
 - [ ] Evaluation & Ablation Studies
+
+## C1 Retrieval Modernization
+- [x] C1.1 Retrieval Modernization Roadmap

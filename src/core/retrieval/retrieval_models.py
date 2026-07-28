@@ -78,15 +78,10 @@ class FAISSRetrievalDefinition(RetrievalDefinition):
 class HybridRetrievalDefinition(RetrievalDefinition):
     """Immutable configuration for a hybrid retrieval invocation."""
 
-    bm25_top_k: int = Field(
+    constituent_definitions: tuple[RetrievalDefinition, ...] = Field(
         ...,
-        gt=0,
-        description="Candidate pool size requested from BM25 constituent.",
-    )
-    faiss_top_k: int = Field(
-        ...,
-        gt=0,
-        description="Candidate pool size requested from FAISS constituent.",
+        min_length=1,
+        description="Candidate pool definitions corresponding to each constituent retriever.",
     )
     top_k: int = Field(
         ...,

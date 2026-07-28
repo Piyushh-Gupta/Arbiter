@@ -228,27 +228,30 @@ class FAISSRetriever(BaseRetriever):
 
 class HybridRetriever(BaseRetriever):
     """
-    Stateless concrete execution strategy for hybrid (BM25 + FAISS) retrieval
-    using Reciprocal Rank Fusion (RRF).
+    Stateless concrete execution strategy for hybrid retrieval
+    using Reciprocal Rank Fusion (RRF) over an arbitrary collection of constituent retrievers.
     """
 
-    def __init__(
-        self,
-        bm25_retriever: BM25Retriever,
-        faiss_retriever: FAISSRetriever,
-    ) -> None:
+    def __init__(self, retrievers: tuple[BaseRetriever, ...]) -> None:
         """
-        Initializes the hybrid retriever with fully constructed constituents.
+        Initializes the hybrid retriever with an arbitrary collection of fully constructed constituents.
         """
-        self._bm25 = bm25_retriever
-        self._faiss = faiss_retriever
+        if not retrievers:
+            raise ValueError("HybridRetriever requires at least one constituent retriever.")
+        self._retrievers = retrievers
 
     def validate_compatibility(self, definition: RetrievalDefinition) -> None:
-        """Fails fast if the definition is not a HybridRetrievalDefinition."""
+        """Fails fast if the definition is not a HybridRetrievalDefinition or constituents mismatch."""
         if not isinstance(definition, HybridRetrievalDefinition):
             raise RetrievalConfigurationError(
                 f"HybridRetriever requires HybridRetrievalDefinition, got {type(definition).__name__}"
             )
+        if len(definition.constituent_definitions) != len(self._retrievers):
+            raise RetrievalConfigurationError(
+                f"HybridRetriever has {len(self._retrievers)} constituents, but definition provides {len(definition.constituent_definitions)} definitions."
+            )
+        for retriever, constituent_def in zip(self._retrievers, definition.constituent_definitions):
+            retriever.validate_compatibility(constituent_def)
 
     def retrieve(self, claim: str, definition: RetrievalDefinition) -> EvidenceBundle:
         """
@@ -258,39 +261,31 @@ class HybridRetriever(BaseRetriever):
             raise RetrievalConfigurationError(
                 f"HybridRetriever requires HybridRetrievalDefinition, got {type(definition).__name__}"
             )
+        if len(definition.constituent_definitions) != len(self._retrievers):
+            raise RetrievalExecutionError(
+                f"Constituent definitions mismatch: expected {len(self._retrievers)}, got {len(definition.constituent_definitions)}"
+            )
 
         try:
-            # 1. Execute constituent retrievers with ephemeral threshold-free definitions
-            bm25_def = BM25RetrievalDefinition(top_k=definition.bm25_top_k)
-            faiss_def = FAISSRetrievalDefinition(top_k=definition.faiss_top_k)
-
-            bm25_bundle = self._bm25.retrieve(claim, bm25_def)
-            faiss_bundle = self._faiss.retrieve(claim, faiss_def)
+            # 1. Execute constituent retrievers
+            bundles = []
+            for retriever, constituent_def in zip(self._retrievers, definition.constituent_definitions):
+                bundles.append(retriever.retrieve(claim, constituent_def))
 
             # 2. Compute RRF scores
             # Use (document_id, span_id) as the identity key.
             rrf_scores: dict[tuple[str, str], float] = {}
             passage_map: dict[tuple[str, str], EvidencePassage] = {}
 
-            # BM25 ranks
-            for rank_zero_indexed, passage in enumerate(bm25_bundle.passages):
-                rank = rank_zero_indexed + 1
-                key = (passage.document_id, passage.span_id)
-                if key not in passage_map:
-                    passage_map[key] = passage
-                if key not in rrf_scores:
-                    rrf_scores[key] = 0.0
-                rrf_scores[key] += 1.0 / (definition.rrf_k + rank)
-
-            # FAISS ranks
-            for rank_zero_indexed, passage in enumerate(faiss_bundle.passages):
-                rank = rank_zero_indexed + 1
-                key = (passage.document_id, passage.span_id)
-                if key not in passage_map:
-                    passage_map[key] = passage
-                if key not in rrf_scores:
-                    rrf_scores[key] = 0.0
-                rrf_scores[key] += 1.0 / (definition.rrf_k + rank)
+            for bundle in bundles:
+                for rank_zero_indexed, passage in enumerate(bundle.passages):
+                    rank = rank_zero_indexed + 1
+                    key = (passage.document_id, passage.span_id)
+                    if key not in passage_map:
+                        passage_map[key] = passage
+                    if key not in rrf_scores:
+                        rrf_scores[key] = 0.0
+                    rrf_scores[key] += 1.0 / (definition.rrf_k + rank)
 
             # 3. Sort by descending RRF score, breaking ties lexicographically by (document_id, span_id)
             sorted_keys = sorted(
