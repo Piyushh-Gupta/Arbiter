@@ -95,3 +95,4 @@
 
 ## C1 Retrieval Modernization
 - [x] C1.1 Retrieval Modernization Roadmap
+- [x] C1.2 Retrieval Foundation Interfaces

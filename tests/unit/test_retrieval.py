@@ -516,6 +516,21 @@ def dummy_encoder() -> QueryEncoder:
     """A mock QueryEncoder that returns fixed deterministic vectors."""
 
     class MockEncoder:
+        @property
+        def model_id(self) -> str:
+            return "mock-encoder-v1"
+
+        @property
+        def embedding_dimension(self) -> int:
+            return 2
+
+        @property
+        def device(self) -> str:
+            return "cpu"
+
+        def is_ready(self) -> bool:
+            return True
+
         def encode(self, text: str) -> np.ndarray:
             # Deterministic mapping for tests based on text length
             val = float(len(text))

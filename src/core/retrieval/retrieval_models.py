@@ -139,6 +139,40 @@ class EvidencePassage(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class RetrievalCandidate(BaseModel):
+    """Minimal immutable structure representing a single high-recall retrieval hit before it is materialized into an EvidencePassage."""
+
+    span_id: str = Field(
+        ...,
+        description="Identifier for the specific chunk or span within the document.",
+    )
+    score: float = Field(
+        ...,
+        description="Raw or normalized score assigned by the retrieval source.",
+    )
+    metadata: Mapping[str, JsonValue] = Field(
+        default_factory=dict,
+        description="Optional vector-store metadata (e.g., source document mappings).",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RetrievalCandidateSet(BaseModel):
+    """Immutable, ordered collection of retrieval candidates."""
+
+    candidates: tuple[RetrievalCandidate, ...] = Field(
+        ...,
+        description="Ordered sequence of retrieved candidates by descending relevance score.",
+    )
+    metadata: RetrievalMetadata = Field(
+        ...,
+        description="Minimal execution provenance for downstream observability.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
 class EvidenceBundle(BaseModel):
     """Immutable, ordered collection of retrieved passages for a single claim invocation."""
 

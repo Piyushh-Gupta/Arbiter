@@ -4,7 +4,12 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-from src.core.retrieval.retrieval_models import EvidenceBundle, RetrievalDefinition
+from src.core.retrieval.retrieval_models import (
+    EvidenceBundle,
+    RetrievalCandidate,
+    RetrievalCandidateSet,
+    RetrievalDefinition,
+)
 
 
 @runtime_checkable
@@ -31,9 +36,26 @@ class BaseRetriever(Protocol):
 
 @runtime_checkable
 class BaseEncoder(Protocol):
-    """Stateless protocol for encoding textual inputs into dense embeddings."""
+    """Stateless protocol representing shared immutable encoder capabilities."""
 
-    pass
+    @property
+    def model_id(self) -> str:
+        """The identifier of the underlying model."""
+        ...
+
+    @property
+    def embedding_dimension(self) -> int:
+        """The size of the output embeddings."""
+        ...
+
+    @property
+    def device(self) -> str:
+        """The execution device (e.g. 'cpu', 'cuda')."""
+        ...
+
+    def is_ready(self) -> bool:
+        """Indicates if the encoder has loaded its weights and is ready for inference."""
+        ...
 
 
 @runtime_checkable
@@ -63,10 +85,10 @@ class DocumentEncoder(BaseEncoder, Protocol):
 class BaseVectorStore(Protocol):
     """Stateless protocol for vector database interactions."""
 
-    def search(self, query: np.ndarray, top_k: int) -> tuple[np.ndarray, np.ndarray]:
+    def search(self, query: np.ndarray, top_k: int) -> tuple[RetrievalCandidate, ...]:
         """
         Executes a vector similarity search.
-        Returns a tuple of (distances, indices).
+        Returns a tuple of RetrievalCandidate instances.
         """
         ...
 
@@ -80,8 +102,42 @@ class BaseCandidateGenerator(Protocol):
 
     def generate_candidates(
         self, claim: str, definition: RetrievalDefinition
-    ) -> EvidenceBundle:
+    ) -> RetrievalCandidateSet:
         """
-        Generates an initial set of evidence candidates based on the claim.
+        Generates an initial set of high-recall evidence candidates.
+        """
+        ...
+
+
+@runtime_checkable
+class BaseReranker(Protocol):
+    """
+    Stateless protocol for cross-encoder/late-interaction reranking.
+    Independent of vector stores and initial candidate generation.
+    """
+
+    def rerank(
+        self,
+        claim: str,
+        candidates: RetrievalCandidateSet,
+        definition: RetrievalDefinition,
+    ) -> RetrievalCandidateSet:
+        """
+        Scores and reorders a set of candidates based on the original claim.
+        Returns a new RetrievalCandidateSet with normalized scores.
+        """
+        ...
+
+
+@runtime_checkable
+class IndexBuilder(Protocol):
+    """
+    Stateful protocol for offline index creation and management.
+    Never invoked by the online API.
+    """
+
+    def build_index(self, corpus_path: str, index_output_path: str) -> None:
+        """
+        Ingests a corpus, chunks, encodes, and builds a vector index and metadata store.
         """
         ...
