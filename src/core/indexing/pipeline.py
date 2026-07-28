@@ -100,7 +100,7 @@ class IndexingPipeline:
         texts = [c.text for c in chunks]
         embeddings = self._encoder.encode_batch(texts) if texts else None
 
-        from src.core.indexing.models import ArtifactLocation, IndexManifest
+        from src.core.indexing.models import ArtifactLocation, EmbeddingModelMetadata, IndexManifest
 
         artifacts = {}
         for builder in self._builders:
@@ -111,8 +111,13 @@ class IndexingPipeline:
 
         manifest = IndexManifest(
             dataset_version=dataset_version,
-            encoder_model_id=self._encoder.model_id,
-            embedding_dimension=self._encoder.embedding_dimension,
+            embedding_metadata=EmbeddingModelMetadata(
+                model_id=self._encoder.model_id,
+                embedding_dimension=self._encoder.embedding_dimension,
+                pooling_strategy=self._encoder.pooling_strategy,
+                normalization_strategy=self._encoder.normalization_strategy,
+                model_revision=self._encoder.model_revision,
+            ),
             artifacts=artifacts,
         )
         self._writer.write_manifest(manifest, output_dir)

@@ -90,3 +90,9 @@
 - Modified tests to use a 5-document dummy corpus to avoid rank_bm25 negative IDF issue.
 - Integrated WhitespaceTokenizer into indexing pipelines and candidate generation.
 
+
+### C1.5 Dense Retrieval Implementation
+- Replaced deprecated `FAISSRetriever` with `DenseRetriever` containing `DenseCandidateGenerator` and `MetadataDocumentStore`.
+- Updated `IndexManifest` schema to incorporate robust `EmbeddingModelMetadata`.
+- Introduced stateless `SentenceTransformerQueryEncoder` supporting configurable embedding generation.
+- Updated indexing and retrieval bootstraps to wire dense configurations.

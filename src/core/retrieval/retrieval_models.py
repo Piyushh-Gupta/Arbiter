@@ -59,7 +59,7 @@ class BM25RetrievalDefinition(RetrievalDefinition):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
-class FAISSRetrievalDefinition(RetrievalDefinition):
+class DenseRetrievalDefinition(RetrievalDefinition):
     """Immutable configuration for a FAISS retrieval invocation."""
 
     top_k: int = Field(
@@ -67,9 +67,9 @@ class FAISSRetrievalDefinition(RetrievalDefinition):
         gt=0,
         description="Maximum number of passages to return.",
     )
-    similarity_threshold: float | None = Field(
+    min_score: float | None = Field(
         default=None,
-        description="Optional minimum cosine similarity filter.",
+        description="Optional minimum cosine similarity filter (min_score).",
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)

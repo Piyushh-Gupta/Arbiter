@@ -69,7 +69,7 @@ def test_invalid_request_validation(app: FastAPI) -> None:
         # Empty claim
         empty_claim_payload = {
             "claim": "",
-            "retrieval_profile_id": "default_retrieval",
+            "retrieval_profile_id": "bm25_retrieval",
             "verification_profile_id": "default_verification",
             "failure_analysis_profile_id": "default_failure_analysis",
             "uncertainty_profile_id": "default_uncertainty",

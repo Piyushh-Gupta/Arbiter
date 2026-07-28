@@ -16,7 +16,7 @@ from src.core.retrieval.bm25 import (
 )
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
-    FAISSRetrievalDefinition,
+    DenseRetrievalDefinition,
 )
 
 
@@ -128,7 +128,7 @@ def test_bm25_generator(dummy_bm25_index: BM25Okapi) -> None:
 
     # Test invalid definition
     with pytest.raises(RetrievalConfigurationError):
-        generator.generate_candidates("hello", FAISSRetrievalDefinition(top_k=5))
+        generator.generate_candidates("hello", DenseRetrievalDefinition(top_k=5))
 
 
 def test_bm25_retriever(dummy_bm25_index: BM25Okapi, dummy_metadata_path: str) -> None:
@@ -143,7 +143,7 @@ def test_bm25_retriever(dummy_bm25_index: BM25Okapi, dummy_metadata_path: str) -
     # validate compatibility
     retriever.validate_compatibility(definition)
     with pytest.raises(RetrievalConfigurationError):
-        retriever.validate_compatibility(FAISSRetrievalDefinition(top_k=5))
+        retriever.validate_compatibility(DenseRetrievalDefinition(top_k=5))
 
     bundle = retriever.retrieve("world", definition)
     assert bundle.metadata.strategy_id == "bm25"

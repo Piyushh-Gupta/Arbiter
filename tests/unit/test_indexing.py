@@ -14,7 +14,7 @@ from src.core.indexing.builders import (
 )
 from src.core.indexing.chunking import RecursiveDocumentChunker
 from src.core.indexing.loaders import JSONLCorpusLoader
-from src.core.indexing.models import ArtifactLocation, IndexManifest
+from src.core.indexing.models import ArtifactLocation, IndexManifest, EmbeddingModelMetadata
 from src.core.indexing.pipeline import IndexingPipeline
 from src.core.indexing.validators import ManifestArtifactValidator
 from src.core.indexing.writers import ManifestWriter
@@ -94,7 +94,7 @@ def test_pipeline_execution(dummy_corpus: str, temp_dir: str) -> None:
     manifest = pipeline.run(dummy_corpus, temp_dir)
 
     assert manifest.dataset_version == version
-    assert manifest.embedding_dimension == 128
+    assert manifest.embedding_metadata.embedding_dimension == 128
     assert "sparse_index" in manifest.artifacts
     assert "dense_index" in manifest.artifacts
     assert "metadata" in manifest.artifacts
@@ -106,11 +106,16 @@ def test_pipeline_execution(dummy_corpus: str, temp_dir: str) -> None:
 
 def test_manifest_validation_version_mismatch(temp_dir: str) -> None:
     manifest = IndexManifest(
-        dataset_version="v1",
-        encoder_model_id="test",
-        embedding_dimension=128,
-        artifacts={},
-    )
+            dataset_version="v1",
+            embedding_metadata=EmbeddingModelMetadata(
+                model_id="test",
+                embedding_dimension=128,
+                pooling_strategy="mean",
+                normalization_strategy="l2",
+                model_revision=None
+            ),
+            artifacts={},
+        )
 
     validator = ManifestArtifactValidator(
         expected_dataset_version="v2", expected_dimension=128
@@ -121,11 +126,16 @@ def test_manifest_validation_version_mismatch(temp_dir: str) -> None:
 
 def test_manifest_validation_dimension_mismatch(temp_dir: str) -> None:
     manifest = IndexManifest(
-        dataset_version="v1",
-        encoder_model_id="test",
-        embedding_dimension=128,
-        artifacts={},
-    )
+            dataset_version="v1",
+            embedding_metadata=EmbeddingModelMetadata(
+                model_id="test",
+                embedding_dimension=128,
+                pooling_strategy="mean",
+                normalization_strategy="l2",
+                model_revision=None
+            ),
+            artifacts={},
+        )
 
     validator = ManifestArtifactValidator(
         expected_dataset_version="v1", expected_dimension=256
@@ -137,8 +147,13 @@ def test_manifest_validation_dimension_mismatch(temp_dir: str) -> None:
 def test_manifest_validation_missing_artifact(temp_dir: str) -> None:
     manifest = IndexManifest(
         dataset_version="v1",
-        encoder_model_id="test",
-        embedding_dimension=128,
+        embedding_metadata=EmbeddingModelMetadata(
+            model_id="test",
+            embedding_dimension=128,
+            pooling_strategy="mean",
+            normalization_strategy="l2",
+            model_revision=None
+        ),
         artifacts={
             "fake": ArtifactLocation(
                 path=os.path.join(temp_dir, "missing.bin"), checksum="123"

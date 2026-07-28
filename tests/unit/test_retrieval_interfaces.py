@@ -30,6 +30,18 @@ class DummyQueryEncoder:
     def device(self) -> str:
         return "cpu"
 
+    @property
+    def pooling_strategy(self) -> str:
+        return "mean"
+
+    @property
+    def normalization_strategy(self) -> str:
+        return "l2"
+
+    @property
+    def model_revision(self) -> str | None:
+        return None
+
     def is_ready(self) -> bool:
         return True
 
@@ -49,6 +61,18 @@ class DummyDocumentEncoder:
     @property
     def device(self) -> str:
         return "cpu"
+
+    @property
+    def pooling_strategy(self) -> str:
+        return "mean"
+
+    @property
+    def normalization_strategy(self) -> str:
+        return "l2"
+
+    @property
+    def model_revision(self) -> str | None:
+        return None
 
     def is_ready(self) -> bool:
         return True

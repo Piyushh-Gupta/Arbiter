@@ -27,9 +27,9 @@ class ManifestArtifactValidator(ArtifactValidator):
                 f"Manifest dataset version {manifest.dataset_version} does not match expected {self.expected_dataset_version}"
             )
 
-        if manifest.embedding_dimension != self.expected_dimension:
+        if manifest.embedding_metadata.embedding_dimension != self.expected_dimension:
             raise RetrievalConfigurationError(
-                f"Manifest embedding dimension {manifest.embedding_dimension} does not match expected {self.expected_dimension}"
+                f"Manifest embedding dimension {manifest.embedding_metadata.embedding_dimension} does not match expected {self.expected_dimension}"
             )
 
         for name, artifact in manifest.artifacts.items():

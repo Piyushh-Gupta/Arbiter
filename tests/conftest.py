@@ -6,6 +6,21 @@ import pytest
 
 from src.core.paths import ProjectPaths
 
+import numpy as np
+from unittest.mock import MagicMock
+
+@pytest.fixture(autouse=True)
+def mock_sentence_transformers(monkeypatch: pytest.MonkeyPatch) -> None:
+    try:
+        import src.core.retrieval.dense
+        mock_st = MagicMock()
+        mock_st.return_value.get_sentence_embedding_dimension.return_value = 128
+        mock_st.return_value.encode.return_value = np.zeros((1, 128), dtype=np.float32)
+        monkeypatch.setattr(src.core.retrieval.dense, "SentenceTransformer", mock_st)
+    except ImportError:
+        pass
+
+
 
 @pytest.fixture(autouse=True, scope="session")
 def setup_dummy_index_for_tests(tmp_path_factory: pytest.TempPathFactory) -> None:

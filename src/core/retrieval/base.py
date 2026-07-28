@@ -57,6 +57,21 @@ class BaseEncoder(Protocol):
         """The execution device (e.g. 'cpu', 'cuda')."""
         ...
 
+    @property
+    def pooling_strategy(self) -> str:
+        """The pooling strategy (e.g. 'mean', 'cls')."""
+        ...
+
+    @property
+    def normalization_strategy(self) -> str:
+        """The normalization strategy (e.g. 'l2')."""
+        ...
+
+    @property
+    def model_revision(self) -> str | None:
+        """The revision or version of the model."""
+        ...
+
     def is_ready(self) -> bool:
         """Indicates if the encoder has loaded its weights and is ready for inference."""
         ...

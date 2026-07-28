@@ -121,6 +121,15 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         MetadataDocumentStore,
         WhitespaceTokenizer,
     )
+    from src.core.retrieval.dense import (
+        SentenceTransformerQueryEncoder,
+        FAISSVectorStore,
+        DenseCandidateGenerator,
+        DenseRetriever,
+    )
+    from src.core.retrieval.retrieval_models import (
+        DenseRetrievalDefinition,
+    )
 
     manifest_path = ProjectPaths.DATA_INDEX / "index_manifest.json"
     if not manifest_path.exists():
@@ -133,9 +142,9 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         raise RetrievalConfigurationError(f"Invalid manifest: {e}")
 
     # For C1.4 we require sparse_index and metadata artifacts
-    if "sparse_index" not in manifest.artifacts or "metadata" not in manifest.artifacts:
+    if "sparse_index" not in manifest.artifacts or "metadata" not in manifest.artifacts or "dense_index" not in manifest.artifacts:
         raise RetrievalConfigurationError(
-            "Manifest missing required sparse_index or metadata artifacts."
+            "Manifest missing required sparse_index, dense_index or metadata artifacts."
         )
 
     sparse_path = manifest.artifacts["sparse_index"].path
@@ -180,13 +189,55 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
 
     engine = BM25Retriever(generator=generator, document_store=document_store)
 
-    definition = BM25RetrievalDefinition(top_k=5)
-    profile = RetrievalProfile(
-        profile_id="default_retrieval",
-        definition=definition,
+    bm25_definition = BM25RetrievalDefinition(top_k=5)
+    bm25_profile = RetrievalProfile(
+        profile_id="bm25_retrieval",
+        definition=bm25_definition,
         strategy=engine,
     )
-    return RetrievalProfileRegistry(profiles=(profile,))
+
+    dense_path = manifest.artifacts["dense_index"].path
+    if not os.path.exists(dense_path):
+        raise RetrievalConfigurationError(f"Missing FAISS artifact at {dense_path}")
+
+    # Validate embedding metadata
+    if not hasattr(manifest, "embedding_metadata") or manifest.embedding_metadata is None:
+        raise RetrievalConfigurationError("Manifest missing embedding_metadata.")
+
+    # Initialize Dense Components
+    # In a real app we'd load device from config, but we'll use "cpu" for fail-fast
+    query_encoder = SentenceTransformerQueryEncoder(
+        model_id=manifest.embedding_metadata.model_id,
+        device="cpu",
+    )
+    
+    if query_encoder.embedding_dimension != manifest.embedding_metadata.embedding_dimension:
+        raise RetrievalConfigurationError("Encoder embedding dimension does not match manifest.")
+
+    faiss_store = FAISSVectorStore(
+        index_path=dense_path,
+        manifest=manifest,
+        span_ids=ordered_span_ids,
+    )
+
+    dense_generator = DenseCandidateGenerator(
+        query_encoder=query_encoder,
+        vector_store=faiss_store,
+    )
+
+    dense_engine = DenseRetriever(
+        candidate_generator=dense_generator,
+        document_store=document_store,
+    )
+
+    dense_definition = DenseRetrievalDefinition(top_k=5)
+    dense_profile = RetrievalProfile(
+        profile_id="dense_retrieval",
+        definition=dense_definition,
+        strategy=dense_engine,
+    )
+
+    return RetrievalProfileRegistry(profiles=(bm25_profile, dense_profile))
 
 
 def build_verification_registry(config: AppConfig) -> VerificationProfileRegistry:

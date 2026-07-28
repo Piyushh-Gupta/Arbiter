@@ -98,3 +98,4 @@
 - [x] C1.2 Retrieval Foundation Interfaces
 - [x] C1.3 Offline Indexing Framework
 - [x] C1.4 BM25 Retriever
+- [x] C1.5 Dense Retrieval

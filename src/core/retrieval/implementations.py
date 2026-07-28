@@ -11,14 +11,14 @@ from src.core.retrieval.retrieval_models import (
     CorpusEntry,
     EvidenceBundle,
     EvidencePassage,
-    FAISSRetrievalDefinition,
+    DenseRetrievalDefinition,
     HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
 )
 
 
-class FAISSRetriever(BaseRetriever):
+class DenseRetriever(BaseRetriever):
     """
     Stateless concrete execution strategy for FAISS semantic retrieval.
     """
@@ -37,19 +37,19 @@ class FAISSRetriever(BaseRetriever):
         self._encoder = encoder
 
     def validate_compatibility(self, definition: RetrievalDefinition) -> None:
-        """Fails fast if the definition is not a FAISSRetrievalDefinition."""
-        if not isinstance(definition, FAISSRetrievalDefinition):
+        """Fails fast if the definition is not a DenseRetrievalDefinition."""
+        if not isinstance(definition, DenseRetrievalDefinition):
             raise RetrievalConfigurationError(
-                f"FAISSRetriever requires FAISSRetrievalDefinition, got {type(definition).__name__}"
+                f"DenseRetriever requires DenseRetrievalDefinition, got {type(definition).__name__}"
             )
 
     def retrieve(self, claim: str, definition: RetrievalDefinition) -> EvidenceBundle:
         """
         Executes the FAISS retrieval process.
         """
-        if not isinstance(definition, FAISSRetrievalDefinition):
+        if not isinstance(definition, DenseRetrievalDefinition):
             raise RetrievalConfigurationError(
-                f"FAISSRetriever requires FAISSRetrievalDefinition, got {type(definition).__name__}"
+                f"DenseRetriever requires DenseRetrievalDefinition, got {type(definition).__name__}"
             )
 
         try:
@@ -79,8 +79,8 @@ class FAISSRetriever(BaseRetriever):
 
                 # Apply score threshold if defined
                 if (
-                    definition.similarity_threshold is not None
-                    and score < definition.similarity_threshold
+                    definition.min_score is not None
+                    and score < definition.min_score
                 ):
                     continue
 

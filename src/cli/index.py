@@ -61,7 +61,7 @@ def build(corpus_path: str, output_dir: str, encoder_module: str = "dummy") -> N
     texts = [c.text for c in chunks]
     embeddings = pipeline._encoder.encode_batch(texts) if texts else None
 
-    from src.core.indexing.models import ArtifactLocation, IndexManifest
+    from src.core.indexing.models import ArtifactLocation, EmbeddingModelMetadata, IndexManifest
 
     artifacts = {}
     for builder in pipeline._builders:
@@ -70,8 +70,13 @@ def build(corpus_path: str, output_dir: str, encoder_module: str = "dummy") -> N
 
     manifest = IndexManifest(
         dataset_version=dataset_version,
-        encoder_model_id=pipeline._encoder.model_id,
-        embedding_dimension=pipeline._encoder.embedding_dimension,
+        embedding_metadata=EmbeddingModelMetadata(
+            model_id=pipeline._encoder.model_id,
+            embedding_dimension=pipeline._encoder.embedding_dimension,
+            pooling_strategy=pipeline._encoder.pooling_strategy,
+            normalization_strategy=pipeline._encoder.normalization_strategy,
+            model_revision=pipeline._encoder.model_revision,
+        ),
         artifacts=artifacts,
     )
     pipeline._writer.write_manifest(manifest, output_dir)

@@ -18,7 +18,7 @@ def valid_http_request_payload() -> dict[str, str]:
     """Provides a valid EvaluateClaimRequest payload as a dictionary."""
     return {
         "claim": "The quick brown fox jumps over the lazy dog.",
-        "retrieval_profile_id": "default_retrieval",
+        "retrieval_profile_id": "bm25_retrieval",
         "verification_profile_id": "default_verification",
         "failure_analysis_profile_id": "default_failure_analysis",
         "uncertainty_profile_id": "default_uncertainty",
@@ -33,7 +33,7 @@ def valid_domain_request() -> PipelineExecutionRequest:
     """Provides a valid PipelineExecutionRequest domain model."""
     return PipelineExecutionRequest(
         claim="The quick brown fox jumps over the lazy dog.",
-        retrieval_profile_id="default_retrieval",
+        retrieval_profile_id="bm25_retrieval",
         verification_profile_id="default_verification",
         failure_analysis_profile_id="default_failure_analysis",
         uncertainty_profile_id="default_uncertainty",

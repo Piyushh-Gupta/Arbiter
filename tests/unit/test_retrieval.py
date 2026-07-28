@@ -8,12 +8,12 @@ import pytest
 
 from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionError
 from src.core.retrieval.base import BaseRetriever, QueryEncoder
-from src.core.retrieval.implementations import FAISSRetriever, HybridRetriever
+from src.core.retrieval.implementations import DenseRetriever, HybridRetriever
 from src.core.retrieval.retrieval_models import (
     CorpusEntry,
     EvidenceBundle,
     EvidencePassage,
-    FAISSRetrievalDefinition,
+    DenseRetrievalDefinition,
     HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
@@ -226,6 +226,18 @@ def dummy_encoder() -> QueryEncoder:
         def device(self) -> str:
             return "cpu"
 
+        @property
+        def pooling_strategy(self) -> str:
+            return "mean"
+
+        @property
+        def normalization_strategy(self) -> str:
+            return "l2"
+
+        @property
+        def model_revision(self) -> str | None:
+            return None
+
         def is_ready(self) -> bool:
             return True
 
@@ -265,14 +277,14 @@ def test_faiss_retriever_satisfies_base_retriever_protocol(
     dummy_corpus: tuple[CorpusEntry, ...],
     dummy_encoder: QueryEncoder,
 ) -> None:
-    """Verify isinstance(FAISSRetriever(...), BaseRetriever)."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    """Verify isinstance(DenseRetriever(...), BaseRetriever)."""
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     assert isinstance(retriever, BaseRetriever)
 
 
 def test_faiss_retrieval_definition_immutability() -> None:
-    """Test that FAISSRetrievalDefinition is strictly immutable."""
-    definition = FAISSRetrievalDefinition(top_k=5)
+    """Test that DenseRetrievalDefinition is strictly immutable."""
+    definition = DenseRetrievalDefinition(top_k=5)
     with pytest.raises(Exception):
         definition.top_k = 10
 
@@ -280,13 +292,13 @@ def test_faiss_retrieval_definition_immutability() -> None:
 def test_faiss_retrieval_definition_requires_positive_top_k() -> None:
     """Verify top_k < 1 is rejected at construction."""
     with pytest.raises(Exception):
-        FAISSRetrievalDefinition(top_k=0)
+        DenseRetrievalDefinition(top_k=0)
 
 
-def test_faiss_retrieval_definition_optional_similarity_threshold() -> None:
-    """Verify similarity_threshold=None is valid."""
-    definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=None)
-    assert definition.similarity_threshold is None
+def test_faiss_retrieval_definition_optional_min_score() -> None:
+    """Verify min_score=None is valid."""
+    definition = DenseRetrievalDefinition(top_k=5, min_score=None)
+    assert definition.min_score is None
 
 
 def test_faiss_retriever_accepts_faiss_definition(
@@ -295,8 +307,8 @@ def test_faiss_retriever_accepts_faiss_definition(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify validate_compatibility succeeds on valid definition."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=3)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=3)
     retriever.validate_compatibility(definition)
 
 
@@ -306,7 +318,7 @@ def test_faiss_retriever_rejects_base_definition(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify RetrievalConfigurationError on wrong definition type."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
     definition = RetrievalDefinition()
     with pytest.raises(RetrievalConfigurationError):
         retriever.validate_compatibility(definition)
@@ -318,8 +330,8 @@ def test_faiss_retriever_returns_top_k_passages(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify exact count returned."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=2)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=2)
     bundle = retriever.retrieve("claim", definition)
     assert len(bundle.passages) == 2
 
@@ -330,37 +342,37 @@ def test_faiss_retriever_descending_score_order(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify passages are sorted by descending score."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=5)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=5)
     bundle = retriever.retrieve("claim", definition)
     scores = [p.score for p in bundle.passages]
     assert scores == sorted(scores, reverse=True)
 
 
-def test_faiss_retriever_similarity_threshold_filters_low_scores(
+def test_faiss_retriever_min_score_filters_low_scores(
     dummy_faiss_index: faiss.Index,
     dummy_corpus: tuple[CorpusEntry, ...],
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify passages below threshold are excluded."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    unfiltered_bundle = retriever.retrieve("claim", FAISSRetrievalDefinition(top_k=5))
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    unfiltered_bundle = retriever.retrieve("claim", DenseRetrievalDefinition(top_k=5))
     min_unfiltered_score = min([p.score for p in unfiltered_bundle.passages])
     threshold = min_unfiltered_score + 0.0001
-    definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=threshold)
+    definition = DenseRetrievalDefinition(top_k=5, min_score=threshold)
     filtered_bundle = retriever.retrieve("claim", definition)
     assert len(filtered_bundle.passages) < len(unfiltered_bundle.passages)
     assert all((p.score >= threshold for p in filtered_bundle.passages))
 
 
-def test_faiss_retriever_similarity_threshold_none_returns_all(
+def test_faiss_retriever_min_score_none_returns_all(
     dummy_faiss_index: faiss.Index,
     dummy_corpus: tuple[CorpusEntry, ...],
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify None threshold disables filtering."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=5, similarity_threshold=None)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=5, min_score=None)
     bundle = retriever.retrieve("claim", definition)
     assert len(bundle.passages) == 5
 
@@ -371,8 +383,8 @@ def test_faiss_retriever_identity(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify document_id/span_id match corpus entry for top result."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=1)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=1)
     bundle = retriever.retrieve("claim", definition)
     vec = dummy_encoder.encode("claim")
     distances, indices = dummy_faiss_index.search(vec.reshape(1, -1), 1)
@@ -388,8 +400,8 @@ def test_faiss_retriever_returns_evidence_bundle(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify return type is EvidenceBundle."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=1)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=1)
     bundle = retriever.retrieve("claim", definition)
     assert isinstance(bundle, EvidenceBundle)
 
@@ -400,8 +412,8 @@ def test_faiss_retriever_metadata_strategy_id(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify metadata.strategy_id == 'faiss'."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=1)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=1)
     bundle = retriever.retrieve("claim", definition)
     assert bundle.metadata.strategy_id == "faiss"
 
@@ -412,8 +424,8 @@ def test_faiss_retriever_metadata_top_k(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify metadata.top_k == definition.top_k."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=3)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=3)
     bundle = retriever.retrieve("claim", definition)
     assert bundle.metadata.top_k == 3
 
@@ -424,8 +436,8 @@ def test_faiss_retriever_determinism(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify identical claims produce identical bundles."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=3)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=3)
     bundle1 = retriever.retrieve("claim", definition)
     bundle2 = retriever.retrieve("claim", definition)
     assert bundle1 == bundle2
@@ -437,8 +449,8 @@ def test_faiss_retriever_handles_fewer_results_than_top_k(
     dummy_encoder: QueryEncoder,
 ) -> None:
     """Verify behavior when index has fewer elements than top_k."""
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=10)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=10)
     bundle = retriever.retrieve("claim", definition)
     assert len(bundle.passages) == 5
 
@@ -449,8 +461,8 @@ def test_faiss_retriever_encoder_is_called_with_claim(
     """Verify encoder is invoked exactly once with the claim string."""
     mock_encoder = MagicMock(spec=QueryEncoder)
     mock_encoder.encode.return_value = np.array([1.0, 0.0], dtype=np.float32)
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, mock_encoder)
-    definition = FAISSRetrievalDefinition(top_k=1)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, mock_encoder)
+    definition = DenseRetrievalDefinition(top_k=1)
     retriever.retrieve("claim", definition)
     mock_encoder.encode.assert_called_once_with("claim")
 
@@ -461,8 +473,8 @@ def test_faiss_retriever_encoder_exception_wraps_to_execution_error(
     """Verify encoder failures raise RetrievalExecutionError."""
     mock_encoder = MagicMock(spec=QueryEncoder)
     mock_encoder.encode.side_effect = ValueError("Encoder failed")
-    retriever = FAISSRetriever(dummy_faiss_index, dummy_corpus, mock_encoder)
-    definition = FAISSRetrievalDefinition(top_k=1)
+    retriever = DenseRetriever(dummy_faiss_index, dummy_corpus, mock_encoder)
+    definition = DenseRetrievalDefinition(top_k=1)
     with pytest.raises(
         RetrievalExecutionError, match="FAISS retrieval execution failed"
     ):
@@ -475,8 +487,8 @@ def test_faiss_retriever_search_exception_wraps_to_execution_error(
     """Verify faiss.Index failures raise RetrievalExecutionError."""
     mock_index = MagicMock(spec=faiss.Index)
     mock_index.search.side_effect = RuntimeError("FAISS crashed")
-    retriever = FAISSRetriever(mock_index, dummy_corpus, dummy_encoder)
-    definition = FAISSRetrievalDefinition(top_k=1)
+    retriever = DenseRetriever(mock_index, dummy_corpus, dummy_encoder)
+    definition = DenseRetrievalDefinition(top_k=1)
     with pytest.raises(
         RetrievalExecutionError, match="FAISS retrieval execution failed"
     ):
@@ -494,8 +506,8 @@ def mock_faiss_retriever() -> MagicMock:
 
 
 def test_hybrid_retrieval_definition_immutability() -> None:
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
@@ -504,8 +516,8 @@ def test_hybrid_retrieval_definition_immutability() -> None:
 
 
 def test_hybrid_retrieval_definition_requires_positive_top_k() -> None:
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     with pytest.raises(Exception):
         HybridRetrievalDefinition(
             constituent_definitions=(bm25_def, faiss_def), top_k=0
@@ -513,8 +525,8 @@ def test_hybrid_retrieval_definition_requires_positive_top_k() -> None:
 
 
 def test_hybrid_retrieval_definition_requires_positive_rrf_k() -> None:
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     with pytest.raises(Exception):
         HybridRetrievalDefinition(
             constituent_definitions=(bm25_def, faiss_def), top_k=5, rrf_k=0
@@ -522,8 +534,8 @@ def test_hybrid_retrieval_definition_requires_positive_rrf_k() -> None:
 
 
 def test_hybrid_retrieval_definition_default_rrf_k_is_60() -> None:
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
@@ -541,8 +553,8 @@ def test_hybrid_retriever_accepts_hybrid_definition(
     mock_bm25_retriever: MagicMock, mock_faiss_retriever: MagicMock
 ) -> None:
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
@@ -562,7 +574,7 @@ def test_hybrid_retriever_rejects_bm25_definition(
     mock_bm25_retriever: MagicMock, mock_faiss_retriever: MagicMock
 ) -> None:
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    definition = FAISSRetrievalDefinition(top_k=5)
+    definition = DenseRetrievalDefinition(top_k=5)
     with pytest.raises(RetrievalConfigurationError):
         retriever.validate_compatibility(definition)
 
@@ -571,7 +583,7 @@ def test_hybrid_retriever_rejects_faiss_definition(
     mock_bm25_retriever: MagicMock, mock_faiss_retriever: MagicMock
 ) -> None:
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    definition = FAISSRetrievalDefinition(top_k=5)
+    definition = DenseRetrievalDefinition(top_k=5)
     with pytest.raises(RetrievalConfigurationError):
         retriever.validate_compatibility(definition)
 
@@ -590,19 +602,19 @@ def test_hybrid_retriever_delegates_to_bm25_and_faiss(
         metadata=RetrievalMetadata(strategy_id="faiss", top_k=5),
     )
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    bm25_def = FAISSRetrievalDefinition(top_k=10)
-    faiss_def = FAISSRetrievalDefinition(top_k=15)
+    bm25_def = DenseRetrievalDefinition(top_k=10)
+    faiss_def = DenseRetrievalDefinition(top_k=15)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
     retriever.retrieve("claim", definition)
     bm25_call_args = mock_bm25_retriever.retrieve.call_args[0]
     assert bm25_call_args[0] == "claim"
-    assert isinstance(bm25_call_args[1], FAISSRetrievalDefinition)
+    assert isinstance(bm25_call_args[1], DenseRetrievalDefinition)
     assert bm25_call_args[1].top_k == 10
     faiss_call_args = mock_faiss_retriever.retrieve.call_args[0]
     assert faiss_call_args[0] == "claim"
-    assert isinstance(faiss_call_args[1], FAISSRetrievalDefinition)
+    assert isinstance(faiss_call_args[1], DenseRetrievalDefinition)
     assert faiss_call_args[1].top_k == 15
 
 
@@ -611,8 +623,8 @@ def test_hybrid_retriever_propagates_bm25_execution_error(
 ) -> None:
     mock_bm25_retriever.retrieve.side_effect = RetrievalExecutionError("BM25 failed")
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
@@ -630,8 +642,8 @@ def test_hybrid_retriever_propagates_faiss_execution_error(
     )
     mock_faiss_retriever.retrieve.side_effect = RetrievalExecutionError("FAISS failed")
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
@@ -655,8 +667,8 @@ def test_hybrid_retriever_deduplicates_passages(
         metadata=RetrievalMetadata(strategy_id="faiss", top_k=1),
     )
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    bm25_def = FAISSRetrievalDefinition(top_k=2)
-    faiss_def = FAISSRetrievalDefinition(top_k=1)
+    bm25_def = DenseRetrievalDefinition(top_k=2)
+    faiss_def = DenseRetrievalDefinition(top_k=1)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=5
     )
@@ -692,8 +704,8 @@ def test_hybrid_retriever_returns_top_k_passages(
         metadata=RetrievalMetadata(strategy_id="faiss", top_k=5),
     )
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
-    bm25_def = FAISSRetrievalDefinition(top_k=5)
-    faiss_def = FAISSRetrievalDefinition(top_k=5)
+    bm25_def = DenseRetrievalDefinition(top_k=5)
+    faiss_def = DenseRetrievalDefinition(top_k=5)
     definition = HybridRetrievalDefinition(
         constituent_definitions=(bm25_def, faiss_def), top_k=3
     )
@@ -724,8 +736,8 @@ def test_hybrid_retriever_rrf_score_boosts_passages_in_both_lists(
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
-            FAISSRetrievalDefinition(top_k=2),
-            FAISSRetrievalDefinition(top_k=2),
+            DenseRetrievalDefinition(top_k=2),
+            DenseRetrievalDefinition(top_k=2),
         ),
         top_k=5,
         rrf_k=60,
@@ -754,8 +766,8 @@ def test_hybrid_retriever_descending_score_order(
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
-            FAISSRetrievalDefinition(top_k=2),
-            FAISSRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=2),
+            DenseRetrievalDefinition(top_k=1),
         ),
         top_k=5,
     )
@@ -782,8 +794,8 @@ def test_hybrid_retriever_tie_breaking_deterministic(
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
-            FAISSRetrievalDefinition(top_k=1),
-            FAISSRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=1),
         ),
         top_k=2,
     )
@@ -811,8 +823,8 @@ def test_hybrid_retriever_no_overlap_union_result(
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
-            FAISSRetrievalDefinition(top_k=1),
-            FAISSRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=1),
         ),
         top_k=5,
     )
@@ -840,8 +852,8 @@ def test_hybrid_retriever_full_overlap_deduplication(
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
-            FAISSRetrievalDefinition(top_k=2),
-            FAISSRetrievalDefinition(top_k=2),
+            DenseRetrievalDefinition(top_k=2),
+            DenseRetrievalDefinition(top_k=2),
         ),
         top_k=5,
     )
@@ -865,8 +877,8 @@ def test_hybrid_retriever_metadata_properties(
     retriever = HybridRetriever((mock_bm25_retriever, mock_faiss_retriever))
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
-            FAISSRetrievalDefinition(top_k=1),
-            FAISSRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=1),
+            DenseRetrievalDefinition(top_k=1),
         ),
         top_k=3,
     )

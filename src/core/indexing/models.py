@@ -54,6 +54,29 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+
+class EmbeddingModelMetadata(BaseModel):
+    """Immutable metadata describing the embedding model used for dense retrieval."""
+
+    model_id: str = Field(
+        ..., description="Identifier of the model used for dense encoding."
+    )
+    embedding_dimension: int = Field(
+        ..., description="The size of the output dense embeddings."
+    )
+    pooling_strategy: str = Field(
+        ..., description="The pooling strategy used (e.g., 'mean', 'cls')."
+    )
+    normalization_strategy: str = Field(
+        ..., description="The normalization strategy used (e.g., 'l2')."
+    )
+    model_revision: str | None = Field(
+        default=None, description="Optional revision or version of the model."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
 class IndexManifest(BaseModel):
     """Immutable versioned artifact containing complete metadata about an offline index build."""
 
@@ -65,13 +88,8 @@ class IndexManifest(BaseModel):
         ...,
         description="Checksum of the source corpus, indicating the dataset version.",
     )
-    encoder_model_id: str = Field(
-        ...,
-        description="Identifier of the model used for dense encoding.",
-    )
-    embedding_dimension: int = Field(
-        ...,
-        description="The size of the output dense embeddings.",
+    embedding_metadata: EmbeddingModelMetadata = Field(
+        ..., description="Metadata describing the embedding model used."
     )
     artifacts: dict[str, ArtifactLocation] = Field(
         ...,
