@@ -32,6 +32,7 @@ class BaseRetriever(Protocol):
 @runtime_checkable
 class BaseEncoder(Protocol):
     """Stateless protocol for encoding textual inputs into dense embeddings."""
+
     pass
 
 
@@ -61,7 +62,7 @@ class DocumentEncoder(BaseEncoder, Protocol):
 @runtime_checkable
 class BaseVectorStore(Protocol):
     """Stateless protocol for vector database interactions."""
-    
+
     def search(self, query: np.ndarray, top_k: int) -> tuple[np.ndarray, np.ndarray]:
         """
         Executes a vector similarity search.

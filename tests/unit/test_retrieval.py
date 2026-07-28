@@ -1101,10 +1101,10 @@ def test_hybrid_retriever_rrf_score_boosts_passages_in_both_lists(
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
             BM25RetrievalDefinition(top_k=2),
-            FAISSRetrievalDefinition(top_k=2)
+            FAISSRetrievalDefinition(top_k=2),
         ),
         top_k=5,
-        rrf_k=60
+        rrf_k=60,
     )
 
     bundle = retriever.retrieve("claim", definition)
@@ -1141,9 +1141,9 @@ def test_hybrid_retriever_descending_score_order(
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
             BM25RetrievalDefinition(top_k=2),
-            FAISSRetrievalDefinition(top_k=1)
+            FAISSRetrievalDefinition(top_k=1),
         ),
-        top_k=5
+        top_k=5,
     )
 
     bundle = retriever.retrieve("claim", definition)
@@ -1176,9 +1176,9 @@ def test_hybrid_retriever_tie_breaking_deterministic(
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
             BM25RetrievalDefinition(top_k=1),
-            FAISSRetrievalDefinition(top_k=1)
+            FAISSRetrievalDefinition(top_k=1),
         ),
-        top_k=2
+        top_k=2,
     )
 
     bundle = retriever.retrieve("claim", definition)
@@ -1212,9 +1212,9 @@ def test_hybrid_retriever_no_overlap_union_result(
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
             BM25RetrievalDefinition(top_k=1),
-            FAISSRetrievalDefinition(top_k=1)
+            FAISSRetrievalDefinition(top_k=1),
         ),
-        top_k=5
+        top_k=5,
     )
 
     bundle = retriever.retrieve("claim", definition)
@@ -1246,9 +1246,9 @@ def test_hybrid_retriever_full_overlap_deduplication(
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
             BM25RetrievalDefinition(top_k=2),
-            FAISSRetrievalDefinition(top_k=2)
+            FAISSRetrievalDefinition(top_k=2),
         ),
-        top_k=5
+        top_k=5,
     )
 
     bundle = retriever.retrieve("claim", definition)
@@ -1275,9 +1275,9 @@ def test_hybrid_retriever_metadata_properties(
     definition = HybridRetrievalDefinition(
         constituent_definitions=(
             BM25RetrievalDefinition(top_k=1),
-            FAISSRetrievalDefinition(top_k=1)
+            FAISSRetrievalDefinition(top_k=1),
         ),
-        top_k=3
+        top_k=3,
     )
 
     bundle = retriever.retrieve("claim", definition)

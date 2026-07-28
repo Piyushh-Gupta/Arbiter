@@ -237,7 +237,9 @@ class HybridRetriever(BaseRetriever):
         Initializes the hybrid retriever with an arbitrary collection of fully constructed constituents.
         """
         if not retrievers:
-            raise ValueError("HybridRetriever requires at least one constituent retriever.")
+            raise ValueError(
+                "HybridRetriever requires at least one constituent retriever."
+            )
         self._retrievers = retrievers
 
     def validate_compatibility(self, definition: RetrievalDefinition) -> None:
@@ -250,7 +252,9 @@ class HybridRetriever(BaseRetriever):
             raise RetrievalConfigurationError(
                 f"HybridRetriever has {len(self._retrievers)} constituents, but definition provides {len(definition.constituent_definitions)} definitions."
             )
-        for retriever, constituent_def in zip(self._retrievers, definition.constituent_definitions):
+        for retriever, constituent_def in zip(
+            self._retrievers, definition.constituent_definitions
+        ):
             retriever.validate_compatibility(constituent_def)
 
     def retrieve(self, claim: str, definition: RetrievalDefinition) -> EvidenceBundle:
@@ -269,7 +273,9 @@ class HybridRetriever(BaseRetriever):
         try:
             # 1. Execute constituent retrievers
             bundles = []
-            for retriever, constituent_def in zip(self._retrievers, definition.constituent_definitions):
+            for retriever, constituent_def in zip(
+                self._retrievers, definition.constituent_definitions
+            ):
                 bundles.append(retriever.retrieve(claim, constituent_def))
 
             # 2. Compute RRF scores
