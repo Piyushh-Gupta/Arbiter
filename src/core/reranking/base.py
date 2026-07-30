@@ -1,26 +1,43 @@
-"""Stateless base reranking protocol."""
+"""Stateless base reranking protocols."""
 
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
+from src.core.reranking.reranking_models import RerankingDefinition
+from src.core.retrieval.retrieval_models import EvidenceBundle, RetrievalCandidateSet
+
 
 @runtime_checkable
-class CrossEncoderScorer(Protocol):
-    """Stateless protocol for cross-encoder scoring."""
+class BaseCrossEncoderScorer(Protocol):
+    """Stateless protocol for cross-encoder model batch scoring."""
 
     def score(self, query: str, passages: Sequence[str]) -> list[float]:
         """
-        Scores a sequence of passages against a query.
+        Scores a sequence of passages against a query string.
+        Returns a list of float relevance scores matching the order of input passages.
+        """
+        ...
 
-        Receives:
-        - query: The claim text.
-        - passages: The raw passage texts to score.
 
-        Returns:
-        - list[float]: Relevance scores, matching the order of the input passages.
-          Must return exactly len(passages) scores.
+# Alias for backward compatibility
+CrossEncoderScorer = BaseCrossEncoderScorer
 
-        The scorer is fully responsible for model lifecycle, device placement,
-        numerical normalization, and internal batching.
+
+@runtime_checkable
+class BaseReranker(Protocol):
+    """Stateless protocol for candidate reranking strategies."""
+
+    def validate_compatibility(self, definition: RerankingDefinition) -> None:
+        """Fails fast if the definition is incompatible with the reranker strategy."""
+        ...
+
+    def rerank(
+        self,
+        claim: str,
+        candidates: RetrievalCandidateSet | EvidenceBundle,
+        definition: RerankingDefinition,
+    ) -> EvidenceBundle:
+        """
+        Scores and reorders candidates using the original claim and materializes an EvidenceBundle.
         """
         ...

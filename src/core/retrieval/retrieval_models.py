@@ -106,6 +106,29 @@ class FusionMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class RerankMetadata(BaseModel):
+    """Immutable metadata recording stage-2 cross-encoder reranking provenance."""
+
+    rerank_score: float = Field(
+        ...,
+        description="Raw Cross-Encoder relevance score assigned to this candidate.",
+    )
+    rerank_rank: int = Field(
+        ...,
+        description="1-based rank assigned after cross-encoder reranking.",
+    )
+    prior_fusion_metadata: FusionMetadata | None = Field(
+        default=None,
+        description="Preserved stage-1 hybrid fusion metadata.",
+    )
+    reranking_model_id: str = Field(
+        ...,
+        description="Model identifier used for cross-encoder reranking.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
 class HybridRetrievalDefinition(RetrievalDefinition):
     """Immutable configuration for a hybrid retrieval invocation."""
 
@@ -181,6 +204,10 @@ class EvidencePassage(BaseModel):
         default=None,
         description="Structured provenance details if candidate was produced via hybrid retrieval.",
     )
+    rerank_metadata: RerankMetadata | None = Field(
+        default=None,
+        description="Structured provenance details if candidate was reranked by a cross-encoder.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -203,6 +230,10 @@ class RetrievalCandidate(BaseModel):
     fusion_metadata: FusionMetadata | None = Field(
         default=None,
         description="Structured provenance details if candidate was produced via hybrid retrieval.",
+    )
+    rerank_metadata: RerankMetadata | None = Field(
+        default=None,
+        description="Structured provenance details if candidate was reranked by a cross-encoder.",
     )
 
     model_config = ConfigDict(frozen=True)

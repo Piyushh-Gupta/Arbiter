@@ -31,6 +31,7 @@ from src.core.failure_analysis.failure_analysis_models import (
 from src.core.failure_analysis.implementations import VerificationFailureAnalyzer
 from src.core.paths import ProjectPaths
 from src.core.pipeline.orchestrator import ArbiterPipeline
+from src.core.reranking.reranking_models import RerankingProfileRegistry
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
     RetrievalProfile,
@@ -337,6 +338,33 @@ def build_explanation_registry(config: AppConfig) -> ExplanationProfileRegistry:
         engine=engine,
     )
     return ExplanationProfileRegistry(profiles=(profile,))
+
+
+class DummyCrossEncoderScorer:
+    """Dummy CrossEncoderScorer for bootstrap DI testing."""
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        return [1.0 for _ in passages]
+
+
+def build_reranking_registry(config: AppConfig) -> RerankingProfileRegistry:
+    """Builds the reranking profile registry."""
+    from src.core.reranking.implementations import CrossEncoderReranker
+    from src.core.reranking.reranking_models import (
+        RerankingDefinition,
+        RerankingProfile,
+        RerankingProfileRegistry,
+    )
+
+    scorer = DummyCrossEncoderScorer()
+    engine = CrossEncoderReranker(scorer=scorer)
+    definition = RerankingDefinition(top_k_input=10, top_k_output=5)
+    profile = RerankingProfile(
+        profile_id="default_reranking",
+        definition=definition,
+        strategy=engine,
+    )
+    return RerankingProfileRegistry(profiles=(profile,))
 
 
 def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:

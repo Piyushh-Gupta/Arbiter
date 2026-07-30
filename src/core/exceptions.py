@@ -299,6 +299,14 @@ class RerankingExecutionError(ArbiterError):
     """Raised when a reranking strategy encounters a runtime failure."""
 
 
+class DuplicateRerankingProfileError(ArbiterError):
+    """Raised when a RerankingProfileRegistry encounters a duplicate profile_id."""
+
+
+class RerankingProfileNotFoundError(ArbiterError):
+    """Raised when a reranking profile cannot be resolved from the registry."""
+
+
 class VerificationConfigurationError(ArbiterError):
     """Raised when a verifier receives an incompatible or malformed definition."""
 
