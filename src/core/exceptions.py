@@ -323,6 +323,30 @@ class CacheProfileNotFoundError(ArbiterError):
     """Raised when a cache profile cannot be resolved from the registry."""
 
 
+class BenchmarkConfigurationError(ArbiterError):
+    """Raised when a benchmark definition or strategy receives an incompatible configuration."""
+
+
+class BenchmarkExecutionError(ArbiterError):
+    """Raised when a benchmark evaluation encounters a runtime failure."""
+
+
+class DuplicateBenchmarkProfileError(ArbiterError):
+    """Raised when a BenchmarkProfileRegistry encounters a duplicate profile_id."""
+
+
+class BenchmarkProfileNotFoundError(ArbiterError):
+    """Raised when a benchmark profile cannot be resolved from the registry."""
+
+
+class DuplicateMetricError(ArbiterError):
+    """Raised when a MetricRegistry encounters a duplicate metric name."""
+
+
+class MetricNotFoundError(ArbiterError):
+    """Raised when a metric cannot be resolved from the MetricRegistry."""
+
+
 class VerificationConfigurationError(ArbiterError):
     """Raised when a verifier receives an incompatible or malformed definition."""
 

@@ -33,6 +33,7 @@ from src.core.failure_analysis.implementations import VerificationFailureAnalyze
 from src.core.paths import ProjectPaths
 from src.core.pipeline.orchestrator import ArbiterPipeline
 from src.core.reranking.reranking_models import RerankingProfileRegistry
+from src.core.retrieval.benchmarking.benchmark_models import BenchmarkProfileRegistry
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
     RetrievalProfile,
@@ -392,6 +393,40 @@ def build_cache_registry(config: AppConfig) -> RetrievalCacheProfileRegistry:
         strategy=cache_strategy,
     )
     return RetrievalCacheProfileRegistry(profiles=(profile,))
+
+
+def build_benchmark_registry(config: AppConfig) -> BenchmarkProfileRegistry:
+    """Builds the benchmark profile registry."""
+    from src.core.retrieval.benchmarking import (
+        BenchmarkDefinition,
+        BenchmarkProfile,
+        BenchmarkProfileRegistry,
+        HitRateCalculator,
+        MetricRegistry,
+        MRRCalculator,
+        NDCGCalculator,
+        PrecisionCalculator,
+        RecallCalculator,
+        RetrievalEvaluator,
+    )
+
+    metric_registry = MetricRegistry(
+        calculators={
+            "recall": RecallCalculator(),
+            "precision": PrecisionCalculator(),
+            "mrr": MRRCalculator(),
+            "ndcg": NDCGCalculator(),
+            "hit_rate": HitRateCalculator(),
+        }
+    )
+    evaluator = RetrievalEvaluator(metric_registry=metric_registry)
+    definition = BenchmarkDefinition(top_k=5)
+    profile = BenchmarkProfile(
+        profile_id="default_benchmark",
+        definition=definition,
+        strategy=evaluator,
+    )
+    return BenchmarkProfileRegistry(profiles=(profile,))
 
 
 def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:
