@@ -96,3 +96,6 @@
 - Updated `IndexManifest` schema to incorporate robust `EmbeddingModelMetadata`.
 - Introduced stateless `SentenceTransformerQueryEncoder` supporting configurable embedding generation.
 - Updated indexing and retrieval bootstraps to wire dense configurations.
+
+### C1.6 Hybrid Retrieval Implementation
+| Architecture | ADR-077: Hybrid Retrieval & Reciprocal Rank Fusion | C1.6 introduces deterministic Hybrid Retrieval combining lexical (BM25) and semantic (Dense) candidate generators via Reciprocal Rank Fusion (RRF). `HybridRetriever` directly owns `BaseCandidateGenerator` instances, executing fusion on raw candidates prior to `DocumentStore` chunk resolution to minimize I/O. Fused candidates are tracked via an immutable `FusionMetadata` provenance model capturing original lexical/semantic ranks and scores alongside the RRF score. Candidate ordering uses RRF score with deterministic tie-breaking based on original corpus insertion order (`corpus_index`). | Approved |

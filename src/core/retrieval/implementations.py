@@ -7,12 +7,12 @@ from pydantic import ValidationError
 
 from src.core.exceptions import RetrievalConfigurationError, RetrievalExecutionError
 from src.core.retrieval.base import BaseRetriever, QueryEncoder
+from src.core.retrieval.hybrid import HybridRetriever
 from src.core.retrieval.retrieval_models import (
     CorpusEntry,
     DenseRetrievalDefinition,
     EvidenceBundle,
     EvidencePassage,
-    HybridRetrievalDefinition,
     RetrievalDefinition,
     RetrievalMetadata,
 )
@@ -122,117 +122,4 @@ class DenseRetriever(BaseRetriever):
             ) from e
 
 
-class HybridRetriever(BaseRetriever):
-    """
-    Stateless concrete execution strategy for hybrid retrieval
-    using Reciprocal Rank Fusion (RRF) over an arbitrary collection of constituent retrievers.
-    """
-
-    def __init__(self, retrievers: tuple[BaseRetriever, ...]) -> None:
-        """
-        Initializes the hybrid retriever with an arbitrary collection of fully constructed constituents.
-        """
-        if not retrievers:
-            raise ValueError(
-                "HybridRetriever requires at least one constituent retriever."
-            )
-        self._retrievers = retrievers
-
-    def validate_compatibility(self, definition: RetrievalDefinition) -> None:
-        """Fails fast if the definition is not a HybridRetrievalDefinition or constituents mismatch."""
-        if not isinstance(definition, HybridRetrievalDefinition):
-            raise RetrievalConfigurationError(
-                f"HybridRetriever requires HybridRetrievalDefinition, got {type(definition).__name__}"
-            )
-        if len(definition.constituent_definitions) != len(self._retrievers):
-            raise RetrievalConfigurationError(
-                f"HybridRetriever has {len(self._retrievers)} constituents, but definition provides {len(definition.constituent_definitions)} definitions."
-            )
-        for retriever, constituent_def in zip(
-            self._retrievers, definition.constituent_definitions
-        ):
-            retriever.validate_compatibility(constituent_def)
-
-    def retrieve(self, claim: str, definition: RetrievalDefinition) -> EvidenceBundle:
-        """
-        Executes hybrid retrieval and fuses results via RRF.
-        """
-        if not isinstance(definition, HybridRetrievalDefinition):
-            raise RetrievalConfigurationError(
-                f"HybridRetriever requires HybridRetrievalDefinition, got {type(definition).__name__}"
-            )
-        if len(definition.constituent_definitions) != len(self._retrievers):
-            raise RetrievalExecutionError(
-                f"Constituent definitions mismatch: expected {len(self._retrievers)}, got {len(definition.constituent_definitions)}"
-            )
-
-        try:
-            # 1. Execute constituent retrievers
-            bundles = []
-            for retriever, constituent_def in zip(
-                self._retrievers, definition.constituent_definitions
-            ):
-                bundles.append(retriever.retrieve(claim, constituent_def))
-
-            # 2. Compute RRF scores
-            # Use (document_id, span_id) as the identity key.
-            rrf_scores: dict[tuple[str, str], float] = {}
-            passage_map: dict[tuple[str, str], EvidencePassage] = {}
-
-            for bundle in bundles:
-                for rank_zero_indexed, passage in enumerate(bundle.passages):
-                    rank = rank_zero_indexed + 1
-                    key = (passage.document_id, passage.span_id)
-                    if key not in passage_map:
-                        passage_map[key] = passage
-                    if key not in rrf_scores:
-                        rrf_scores[key] = 0.0
-                    rrf_scores[key] += 1.0 / (definition.rrf_k + rank)
-
-            # 3. Sort by descending RRF score, breaking ties lexicographically by (document_id, span_id)
-            sorted_keys = sorted(
-                rrf_scores.keys(), key=lambda k: (-rrf_scores[k], k[0], k[1])
-            )
-
-            # 4. Truncate to top_k and assemble bundle
-            top_keys = sorted_keys[: definition.top_k]
-            fused_passages = []
-
-            for key in top_keys:
-                original_passage = passage_map[key]
-                try:
-                    fused_passage = EvidencePassage(
-                        document_id=original_passage.document_id,
-                        span_id=original_passage.span_id,
-                        text=original_passage.text,
-                        score=rrf_scores[key],
-                        metadata=original_passage.metadata,
-                    )
-                    fused_passages.append(fused_passage)
-                except ValidationError as e:
-                    raise RetrievalExecutionError(
-                        f"Failed to construct EvidencePassage for fused key {key}: {e}"
-                    ) from e
-
-            try:
-                bundle = EvidenceBundle(
-                    claim=claim,
-                    passages=tuple(fused_passages),
-                    metadata=RetrievalMetadata(
-                        strategy_id="hybrid",
-                        top_k=definition.top_k,
-                    ),
-                )
-            except ValidationError as e:
-                raise RetrievalExecutionError(
-                    f"Failed to construct EvidenceBundle: {e}"
-                ) from e
-
-            return bundle
-
-        except Exception as e:
-            if isinstance(e, RetrievalExecutionError):
-                raise
-            raise RetrievalExecutionError(
-                f"Hybrid retrieval execution failed: {e}"
-            ) from e
+__all__ = ["DenseRetriever", "HybridRetriever"]

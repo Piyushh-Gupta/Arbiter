@@ -23,9 +23,10 @@ def config() -> Settings:
 
 def test_build_retrieval_registry(config: Settings) -> None:
     registry = build_retrieval_registry(config)
-    assert len(registry.profiles) == 2
+    assert len(registry.profiles) == 3
     assert registry.profiles[0].profile_id == "bm25_retrieval"
     assert registry.profiles[1].profile_id == "dense_retrieval"
+    assert registry.profiles[2].profile_id == "hybrid_retrieval"
 
 
 def test_build_verification_registry(config: Settings) -> None:

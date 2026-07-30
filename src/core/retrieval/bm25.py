@@ -105,7 +105,7 @@ class BM25CandidateGenerator(BaseCandidateGenerator):
                 RetrievalCandidate(
                     span_id=self._span_ids[idx],
                     score=score,
-                    metadata={},
+                    metadata={"corpus_index": int(idx)},
                 )
             )
 

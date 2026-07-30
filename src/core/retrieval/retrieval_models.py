@@ -75,13 +75,47 @@ class DenseRetrievalDefinition(RetrievalDefinition):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
+class FusionMetadata(BaseModel):
+    """Immutable metadata tracking multi-source retrieval provenance and rank metrics."""
+
+    lexical_rank: int | None = Field(
+        default=None,
+        description="1-based rank in BM25 candidate list, if retrieved lexically.",
+    )
+    lexical_score: float | None = Field(
+        default=None,
+        description="Original score from BM25 candidate generator, if retrieved lexically.",
+    )
+    semantic_rank: int | None = Field(
+        default=None,
+        description="1-based rank in Dense candidate list, if retrieved semantically.",
+    )
+    semantic_score: float | None = Field(
+        default=None,
+        description="Original score from Dense candidate generator, if retrieved semantically.",
+    )
+    rrf_score: float = Field(
+        ...,
+        description="Reciprocal Rank Fusion score computed for this candidate.",
+    )
+    retrieval_sources: tuple[str, ...] = Field(
+        ...,
+        description="Tuple of contributing strategy IDs (e.g., ('bm25', 'dense')).",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
 class HybridRetrievalDefinition(RetrievalDefinition):
     """Immutable configuration for a hybrid retrieval invocation."""
 
-    constituent_definitions: tuple[RetrievalDefinition, ...] = Field(
-        ...,
-        min_length=1,
-        description="Candidate pool definitions corresponding to each constituent retriever.",
+    bm25_definition: BM25RetrievalDefinition | None = Field(
+        default=None,
+        description="Optional immutable configuration for BM25 lexical candidate generator.",
+    )
+    dense_definition: DenseRetrievalDefinition | None = Field(
+        default=None,
+        description="Optional immutable configuration for Dense semantic candidate generator.",
     )
     top_k: int = Field(
         ...,
@@ -95,6 +129,14 @@ class HybridRetrievalDefinition(RetrievalDefinition):
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_at_least_one_definition(self) -> "HybridRetrievalDefinition":
+        if self.bm25_definition is None and self.dense_definition is None:
+            raise ValueError(
+                "HybridRetrievalDefinition requires at least one constituent definition (bm25_definition or dense_definition)."
+            )
+        return self
 
 
 class RetrievalMetadata(BaseModel):
@@ -135,6 +177,10 @@ class EvidencePassage(BaseModel):
         default_factory=dict,
         description="Optional corpus-specific metadata (extensible, JSON-compatible).",
     )
+    fusion_metadata: FusionMetadata | None = Field(
+        default=None,
+        description="Structured provenance details if candidate was produced via hybrid retrieval.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -153,6 +199,10 @@ class RetrievalCandidate(BaseModel):
     metadata: Mapping[str, JsonValue] = Field(
         default_factory=dict,
         description="Optional vector-store metadata (e.g., source document mappings).",
+    )
+    fusion_metadata: FusionMetadata | None = Field(
+        default=None,
+        description="Structured provenance details if candidate was produced via hybrid retrieval.",
     )
 
     model_config = ConfigDict(frozen=True)

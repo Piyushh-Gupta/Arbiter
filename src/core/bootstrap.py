@@ -240,6 +240,9 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         document_store=document_store,
     )
 
+    from src.core.retrieval.hybrid import HybridRetriever
+    from src.core.retrieval.retrieval_models import HybridRetrievalDefinition
+
     dense_definition = DenseRetrievalDefinition(top_k=5)
     dense_profile = RetrievalProfile(
         profile_id="dense_retrieval",
@@ -247,7 +250,27 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
         strategy=dense_engine,
     )
 
-    return RetrievalProfileRegistry(profiles=(bm25_profile, dense_profile))
+    hybrid_engine = HybridRetriever(
+        bm25_generator=generator,
+        dense_generator=dense_generator,
+        document_store=document_store,
+    )
+
+    hybrid_definition = HybridRetrievalDefinition(
+        bm25_definition=BM25RetrievalDefinition(top_k=5),
+        dense_definition=DenseRetrievalDefinition(top_k=5),
+        top_k=5,
+        rrf_k=60,
+    )
+    hybrid_profile = RetrievalProfile(
+        profile_id="hybrid_retrieval",
+        definition=hybrid_definition,
+        strategy=hybrid_engine,
+    )
+
+    return RetrievalProfileRegistry(
+        profiles=(bm25_profile, dense_profile, hybrid_profile)
+    )
 
 
 def build_verification_registry(config: AppConfig) -> VerificationProfileRegistry:
