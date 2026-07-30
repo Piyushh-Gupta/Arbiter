@@ -34,6 +34,9 @@ from src.core.paths import ProjectPaths
 from src.core.pipeline.orchestrator import ArbiterPipeline
 from src.core.reranking.reranking_models import RerankingProfileRegistry
 from src.core.retrieval.benchmarking.benchmark_models import BenchmarkProfileRegistry
+from src.core.retrieval.optimization.optimization_models import (
+    OptimizationProfileRegistry,
+)
 from src.core.retrieval.retrieval_models import (
     BM25RetrievalDefinition,
     RetrievalProfile,
@@ -427,6 +430,36 @@ def build_benchmark_registry(config: AppConfig) -> BenchmarkProfileRegistry:
         strategy=evaluator,
     )
     return BenchmarkProfileRegistry(profiles=(profile,))
+
+
+def build_optimization_registry(config: AppConfig) -> OptimizationProfileRegistry:
+    """Builds the optimization profile registry."""
+    from src.core.retrieval.optimization import (
+        BoundedSemaphoreConcurrencyLimiter,
+        ExecutionPolicy,
+        OptimizationDefinition,
+        OptimizationProfile,
+        OptimizationProfileRegistry,
+    )
+
+    policy = ExecutionPolicy(
+        retrieval_batch_size=16,
+        reranking_batch_size=8,
+        max_concurrent_requests=4,
+        request_timeout_ms=5000.0,
+        document_prefetch_size=32,
+    )
+    limiter = BoundedSemaphoreConcurrencyLimiter(
+        max_concurrency=policy.max_concurrent_requests
+    )
+    definition = OptimizationDefinition(execution_policy=policy)
+    profile = OptimizationProfile(
+        profile_id="default_optimization",
+        definition=definition,
+        execution_policy=policy,
+        concurrency_limiter=limiter,
+    )
+    return OptimizationProfileRegistry(profiles=(profile,))
 
 
 def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:

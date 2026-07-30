@@ -347,6 +347,26 @@ class MetricNotFoundError(ArbiterError):
     """Raised when a metric cannot be resolved from the MetricRegistry."""
 
 
+class OptimizationConfigurationError(ArbiterError):
+    """Raised when an optimization policy or profile receives an invalid configuration."""
+
+
+class OptimizationExecutionError(ArbiterError):
+    """Raised when an optimization operation encounters a runtime failure."""
+
+
+class OptimizationTimeoutError(ArbiterError):
+    """Raised when an optimized retrieval operation exceeds the timeout policy."""
+
+
+class DuplicateOptimizationProfileError(ArbiterError):
+    """Raised when an OptimizationProfileRegistry encounters a duplicate profile_id."""
+
+
+class OptimizationProfileNotFoundError(ArbiterError):
+    """Raised when an optimization profile cannot be resolved from the registry."""
+
+
 class VerificationConfigurationError(ArbiterError):
     """Raised when a verifier receives an incompatible or malformed definition."""
 

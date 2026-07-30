@@ -103,3 +103,4 @@
 - [x] C1.7 Cross-Encoder Reranking
 - [x] C1.8 Retrieval Caching
 - [x] C1.9 Retrieval Benchmarking & Evaluation
+- [x] C1.10 Production Retrieval Optimization
