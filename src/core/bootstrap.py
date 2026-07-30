@@ -52,9 +52,9 @@ from src.core.validation import validate_startup
 from src.core.verification.implementations import NLIVerifier
 from src.core.verification.verification_models import (
     NLIVerificationDefinition,
-    VerificationLabel,
     VerificationProfile,
     VerificationProfileRegistry,
+    VerificationVerdict,
 )
 
 # Alias for type hinting mapping the implementation plan
@@ -66,9 +66,9 @@ class DummyNLIModel:
 
     def __init__(self) -> None:
         self.label_map = {
-            0: VerificationLabel.SUPPORTS,
-            1: VerificationLabel.NOT_ENOUGH_INFO,
-            2: VerificationLabel.REFUTES,
+            0: VerificationVerdict.SUPPORTED,
+            1: VerificationVerdict.INSUFFICIENT,
+            2: VerificationVerdict.CONTRADICTED,
         }
 
     def predict(

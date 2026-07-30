@@ -46,7 +46,7 @@ class RetrievalFailureAnalyzer:
             )
 
         bundle = verification_result.evidence_bundle
-        passages = bundle.passages
+        passages = bundle.passages if bundle is not None else ()
 
         flags: list[tuple[FailureFlag, FailureSeverity]] = []
 

@@ -104,3 +104,6 @@
 - [x] C1.8 Retrieval Caching
 - [x] C1.9 Retrieval Benchmarking & Evaluation
 - [x] C1.10 Production Retrieval Optimization
+
+## M2 Verification Modernization
+- [x] M2.1 Verification Architecture Modernization

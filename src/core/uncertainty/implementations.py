@@ -55,6 +55,7 @@ class ConfidenceUncertaintyEstimator:
 
         confidence = failure_analysis_result.verification_result.confidence
 
+        factors: frozenset[UncertaintyFactor]
         if confidence is None:
             score = 1.0
             factors = frozenset(

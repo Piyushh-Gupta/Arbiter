@@ -4,6 +4,7 @@ from typing import Protocol, runtime_checkable
 
 from src.core.retrieval.retrieval_models import EvidenceBundle
 from src.core.verification.verification_models import (
+    PassageVerificationResult,
     VerificationDefinition,
     VerificationResult,
 )
@@ -21,6 +22,23 @@ class BaseVerifier(Protocol):
         """
         ...
 
+    def verify_passages(
+        self,
+        claim: str,
+        bundle: EvidenceBundle,
+    ) -> tuple[PassageVerificationResult, ...]:
+        """
+        Executes passage-level verification logic independently on evidence passages.
+
+        Receives:
+        - claim: The normalized textual assertion.
+        - bundle: The immutable collection of evidence passages.
+
+        Returns:
+        - tuple[PassageVerificationResult, ...]: Passage-level outcomes.
+        """
+        return ()
+
     def verify(
         self,
         claim: str,
@@ -28,18 +46,14 @@ class BaseVerifier(Protocol):
         definition: VerificationDefinition,
     ) -> VerificationResult:
         """
-        Executes verification logic.
+        Executes full verification logic and produces claim-level verification result.
 
         Receives:
-        - claim: The normalized, verified textual assertion.
-        - bundle: The immutable, ordered collection of evidence passages.
-        - definition: The validated, immutable configuration parameters.
+        - claim: The normalized textual assertion.
+        - bundle: The immutable collection of evidence passages.
+        - definition: Validated configuration definition.
 
         Returns:
-        - VerificationResult: A fully materialized, immutable verdict.
-
-        Must not modify the bundle.
-        Must not perform filesystem or network access.
-        Must not cache internal state.
+        - VerificationResult: Fully materialized immutable verdict.
         """
         ...

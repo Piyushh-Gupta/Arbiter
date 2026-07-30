@@ -10,6 +10,7 @@ from src.core.exceptions import (
 from src.core.retrieval.retrieval_models import EvidenceBundle, RetrievalMetadata
 from src.core.verification.base import BaseVerifier
 from src.core.verification.verification_models import (
+    PassageVerificationResult,
     VerificationDefinition,
     VerificationLabel,
     VerificationMetadata,
@@ -112,6 +113,11 @@ class MockVerifier:
     def validate_compatibility(self, definition: VerificationDefinition) -> None:
         if self.reject:
             raise VerificationConfigurationError("Incompatible definition")
+
+    def verify_passages(
+        self, claim: str, bundle: EvidenceBundle
+    ) -> tuple[PassageVerificationResult, ...]:
+        return ()
 
     def verify(
         self,

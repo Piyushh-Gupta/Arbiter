@@ -1,19 +1,28 @@
 """Concrete implementations for the Verification subsystem."""
 
 from collections.abc import Mapping, Sequence
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from src.core.exceptions import (
     VerificationConfigurationError,
     VerificationExecutionError,
 )
 from src.core.retrieval.retrieval_models import EvidenceBundle
+from src.core.verification.aggregation import (
+    BaseAggregationStrategy,
+    MaxConfidenceAggregationStrategy,
+)
 from src.core.verification.verification_models import (
+    LABEL_TO_VERDICT,
+    VERDICT_TO_LABEL,
     NLIVerificationDefinition,
+    PassageVerificationResult,
     VerificationDefinition,
     VerificationLabel,
     VerificationMetadata,
+    VerificationModelMetadata,
     VerificationResult,
+    VerificationVerdict,
     VerifiedPassage,
 )
 
@@ -23,8 +32,8 @@ class NLIModel(Protocol):
     """Stateless protocol for NLI model backend."""
 
     @property
-    def label_map(self) -> Mapping[int, VerificationLabel]:
-        """Translates the model's internal output indices to canonical VerificationLabels."""
+    def label_map(self) -> Mapping[int, Any]:
+        """Translates the model's internal output indices to canonical VerificationVerdict or VerificationLabel values."""
         ...
 
     def predict(
@@ -33,24 +42,14 @@ class NLIModel(Protocol):
         """
         Scores a claim against a batch of passages.
 
-        Receives:
-        - claim: The normalized textual assertion.
-        - passages: An ordered sequence of evidence passage texts.
-
-        Returns:
-        - list[tuple[float, float, float]]: One probability triplet per passage.
-          Each triplet is (p_supports, p_refutes, p_nei), where all three
-          sum to approximately 1.0. The order matches the input passages exactly.
-
-        Must not perform filesystem or network access during inference.
-        Must not cache internal state.
+        Returns list[tuple[float, float, float]]: (p_supports, p_refutes, p_nei).
         """
         ...
 
 
 class NLIVerifier:
     """
-    NLI-based verification strategy using per-label max pooling evidence aggregation.
+    NLI-based verification strategy implementing passage verification and aggregation.
     """
 
     def __init__(self, model: NLIModel, strategy_id: str) -> None:
@@ -63,16 +62,76 @@ class NLIVerifier:
                 f"NLIVerifier requires NLIVerificationDefinition, got {type(definition).__name__}"
             )
 
-        # Validate that model.label_map contains all three labels exactly once.
-        label_values = list(self.model.label_map.values())
-        if len(label_values) != 3 or set(label_values) != {
-            VerificationLabel.SUPPORTS,
-            VerificationLabel.REFUTES,
-            VerificationLabel.NOT_ENOUGH_INFO,
-        }:
+        label_values = [
+            LABEL_TO_VERDICT.get(v, v) for v in self.model.label_map.values()
+        ]
+        valid_set = {
+            VerificationVerdict.SUPPORTED,
+            VerificationVerdict.CONTRADICTED,
+            VerificationVerdict.INSUFFICIENT,
+        }
+        if len(label_values) != 3 or set(label_values) != valid_set:
             raise VerificationConfigurationError(
                 "NLIModel.label_map must contain all three VerificationLabel values exactly once."
             )
+
+    def verify_passages(
+        self,
+        claim: str,
+        bundle: EvidenceBundle,
+    ) -> tuple[PassageVerificationResult, ...]:
+        passages_to_score = bundle.passages
+        if not passages_to_score:
+            return ()
+
+        passage_texts = [p.text for p in passages_to_score]
+        try:
+            raw_predictions = self.model.predict(claim, passage_texts)
+        except Exception as e:
+            raise VerificationExecutionError(f"NLI model execution failed: {e}") from e
+
+        if len(raw_predictions) != len(passages_to_score):
+            raise VerificationExecutionError(
+                f"NLI model returned {len(raw_predictions)} predictions for {len(passages_to_score)} passages."
+            )
+
+        label_to_idx = {
+            LABEL_TO_VERDICT.get(v, v): k for k, v in self.model.label_map.items()
+        }
+        idx_supports = label_to_idx[VerificationVerdict.SUPPORTED]
+        idx_refutes = label_to_idx[VerificationVerdict.CONTRADICTED]
+        idx_nei = label_to_idx[VerificationVerdict.INSUFFICIENT]
+
+        passage_results: list[PassageVerificationResult] = []
+        for passage, triplet in zip(passages_to_score, raw_predictions):
+            p_supports = float(max(0.0, min(1.0, triplet[idx_supports])))
+            p_refutes = float(max(0.0, min(1.0, triplet[idx_refutes])))
+            p_nei = float(max(0.0, min(1.0, triplet[idx_nei])))
+
+            if p_supports >= p_refutes and p_supports >= p_nei:
+                verdict = VerificationVerdict.SUPPORTED
+                conf = p_supports
+            elif p_refutes > p_supports and p_refutes >= p_nei:
+                verdict = VerificationVerdict.CONTRADICTED
+                conf = p_refutes
+            else:
+                verdict = VerificationVerdict.INSUFFICIENT
+                conf = p_nei
+
+            passage_results.append(
+                PassageVerificationResult(
+                    span_id=passage.span_id,
+                    verdict=verdict,
+                    confidence=max(0.0, min(1.0, conf)),
+                    raw_scores={
+                        "SUPPORTED": p_supports,
+                        "CONTRADICTED": p_refutes,
+                        "INSUFFICIENT": p_nei,
+                    },
+                )
+            )
+
+        return tuple(passage_results)
 
     def verify(
         self,
@@ -89,85 +148,61 @@ class NLIVerifier:
 
         if not passages_to_score:
             return VerificationResult(
-                label=VerificationLabel.NOT_ENOUGH_INFO,
+                verdict=VerificationVerdict.INSUFFICIENT,
                 confidence=None,
                 evidence_bundle=bundle,
+                verified_passages=None,
                 metadata=VerificationMetadata(strategy_id=self._strategy_id),
             )
 
-        passage_texts = [p.text for p in passages_to_score]
+        sub_bundle = EvidenceBundle(
+            claim=bundle.claim,
+            passages=passages_to_score,
+            metadata=bundle.metadata,
+        )
 
-        try:
-            raw_predictions = self.model.predict(claim, passage_texts)
-        except Exception as e:
-            raise VerificationExecutionError(f"NLI model execution failed: {e}") from e
+        passage_results = self.verify_passages(claim, sub_bundle)
 
-        if len(raw_predictions) != len(passages_to_score):
-            raise VerificationExecutionError(
-                f"NLI model returned {len(raw_predictions)} predictions for {len(passages_to_score)} passages."
-            )
+        if isinstance(definition.aggregation_strategy, BaseAggregationStrategy):
+            strategy = definition.aggregation_strategy
+        else:
+            strategy = MaxConfidenceAggregationStrategy()
 
-        # Build inverse map: Label -> Index
-        label_to_idx = {v: k for k, v in self.model.label_map.items()}
+        metadata = VerificationModelMetadata(
+            model_identifier=definition.verifier_model,
+            revision="1.0",
+            tokenizer="default",
+            execution_device="cpu",
+            framework_version="1.0.0",
+        )
 
-        idx_supports = label_to_idx[VerificationLabel.SUPPORTS]
-        idx_refutes = label_to_idx[VerificationLabel.REFUTES]
-        idx_nei = label_to_idx[VerificationLabel.NOT_ENOUGH_INFO]
+        res = strategy.aggregate(passage_results, definition, model_metadata=metadata)
 
-        max_supports = -1.0
-        max_refutes = -1.0
-        max_nei = -1.0
-
-        verified_passages: list[VerifiedPassage] = []
-
-        for passage, triplet in zip(passages_to_score, raw_predictions):
-            p_supports = float(max(0.0, min(1.0, triplet[idx_supports])))
-            p_refutes = float(max(0.0, min(1.0, triplet[idx_refutes])))
-            p_nei = float(max(0.0, min(1.0, triplet[idx_nei])))
-
-            if triplet[idx_supports] > max_supports:
-                max_supports = triplet[idx_supports]
-            if triplet[idx_refutes] > max_refutes:
-                max_refutes = triplet[idx_refutes]
-            if triplet[idx_nei] > max_nei:
-                max_nei = triplet[idx_nei]
-
-            # Determine passage-level winning label
-            if p_supports >= p_refutes and p_supports >= p_nei:
-                p_winning_label = VerificationLabel.SUPPORTS
-            elif p_refutes > p_supports and p_refutes >= p_nei:
-                p_winning_label = VerificationLabel.REFUTES
-            else:
-                p_winning_label = VerificationLabel.NOT_ENOUGH_INFO
-
-            verified_passages.append(
+        legacy_verified: list[VerifiedPassage] = []
+        for p, pr in zip(passages_to_score, passage_results):
+            raw = pr.raw_scores or {}
+            legacy_verified.append(
                 VerifiedPassage(
-                    passage=passage,
-                    label=p_winning_label,
-                    supports_score=p_supports,
-                    refutes_score=p_refutes,
-                    not_enough_info_score=p_nei,
+                    passage=p,
+                    label=VERDICT_TO_LABEL.get(
+                        pr.verdict, VerificationLabel.NOT_ENOUGH_INFO
+                    ),
+                    supports_score=raw.get("SUPPORTED", pr.confidence),
+                    refutes_score=raw.get("CONTRADICTED", 0.0),
+                    not_enough_info_score=raw.get("INSUFFICIENT", 0.0),
                 )
             )
 
-        # Tie-breaking logic: SUPPORTS > REFUTES > NOT_ENOUGH_INFO
-        if max_supports >= max_refutes and max_supports >= max_nei:
-            winning_label = VerificationLabel.SUPPORTS
-            winning_confidence = max_supports
-        elif max_refutes > max_supports and max_refutes >= max_nei:
-            winning_label = VerificationLabel.REFUTES
-            winning_confidence = max_refutes
-        else:
-            winning_label = VerificationLabel.NOT_ENOUGH_INFO
-            winning_confidence = max_nei
-
-        # Round confidence slightly to avoid floating point issues triggering pydantic validation
-        winning_confidence = max(0.0, min(1.0, float(winning_confidence)))
-
         return VerificationResult(
-            label=winning_label,
-            confidence=winning_confidence,
+            verdict=res.verdict,
+            confidence=res.confidence,
+            supporting_passages=res.supporting_passages,
+            contradicting_passages=res.contradicting_passages,
+            evidence_attribution=res.evidence_attribution,
+            explanation=res.explanation,
+            uncertainty=res.uncertainty,
+            model_metadata=res.model_metadata,
             evidence_bundle=bundle,
-            verified_passages=tuple(verified_passages),
+            verified_passages=tuple(legacy_verified),
             metadata=VerificationMetadata(strategy_id=self._strategy_id),
         )
