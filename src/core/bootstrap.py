@@ -4,6 +4,7 @@ import logging
 import sys
 from typing import Sequence
 
+from src.core.cache.cache_models import RetrievalCacheProfileRegistry
 from src.core.config import Settings
 from src.core.decision.decision_models import (
     DecisionProfile,
@@ -365,6 +366,32 @@ def build_reranking_registry(config: AppConfig) -> RerankingProfileRegistry:
         strategy=engine,
     )
     return RerankingProfileRegistry(profiles=(profile,))
+
+
+def build_cache_registry(config: AppConfig) -> RetrievalCacheProfileRegistry:
+    """Builds the retrieval cache registry."""
+    from src.core.cache import (
+        CacheDefinition,
+        InMemoryRetrievalCache,
+        RetrievalCacheProfile,
+        RetrievalCacheProfileRegistry,
+    )
+
+    definition = CacheDefinition(
+        enabled=True,
+        backend="in_memory",
+        ttl_seconds=3600,
+        max_entries=1000,
+        eviction_policy="lru",
+        cache_schema_version="1.0",
+    )
+    cache_strategy = InMemoryRetrievalCache(definition=definition)
+    profile = RetrievalCacheProfile(
+        profile_id="default_cache",
+        definition=definition,
+        strategy=cache_strategy,
+    )
+    return RetrievalCacheProfileRegistry(profiles=(profile,))
 
 
 def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:

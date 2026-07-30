@@ -307,6 +307,22 @@ class RerankingProfileNotFoundError(ArbiterError):
     """Raised when a reranking profile cannot be resolved from the registry."""
 
 
+class CacheConfigurationError(ArbiterError):
+    """Raised when a cache definition or strategy receives an incompatible configuration."""
+
+
+class CacheExecutionError(ArbiterError):
+    """Raised when a cache operation encounters a runtime failure."""
+
+
+class DuplicateCacheProfileError(ArbiterError):
+    """Raised when a RetrievalCacheProfileRegistry encounters a duplicate profile_id."""
+
+
+class CacheProfileNotFoundError(ArbiterError):
+    """Raised when a cache profile cannot be resolved from the registry."""
+
+
 class VerificationConfigurationError(ArbiterError):
     """Raised when a verifier receives an incompatible or malformed definition."""
 

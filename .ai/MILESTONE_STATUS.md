@@ -101,3 +101,4 @@
 - [x] C1.5 Dense Retrieval
 - [x] C1.6 Hybrid Retrieval
 - [x] C1.7 Cross-Encoder Reranking
+- [x] C1.8 Retrieval Caching
