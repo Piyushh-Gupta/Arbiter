@@ -383,6 +383,14 @@ class VerificationProfileNotFoundError(ArbiterError):
     """Raised when a verification profile cannot be resolved from the registry."""
 
 
+class CalibrationConfigurationError(ArbiterError):
+    """Raised when a calibrator receives an incompatible or malformed definition."""
+
+
+class CalibrationExecutionError(ArbiterError):
+    """Raised when a calibrator encounters a runtime failure."""
+
+
 class FailureAnalysisConfigurationError(ArbiterError):
     """Raised when a failure analyzer receives an incompatible or malformed definition."""
 

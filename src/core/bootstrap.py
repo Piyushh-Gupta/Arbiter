@@ -2,7 +2,7 @@
 
 import logging
 import sys
-from typing import Sequence
+from typing import Any, Sequence
 
 from src.core.cache.cache_models import RetrievalCacheProfileRegistry
 from src.core.config import Settings
@@ -498,6 +498,135 @@ def build_failure_analysis_registry(
         analyzer=engine,
     )
     return FailureAnalysisProfileRegistry(profiles=(profile,))
+
+
+def build_calibration_registry(config: AppConfig) -> Any:
+    """Builds and validates the calibration profile registry."""
+    import math
+
+    from src.core.calibration.calibration_models import (
+        CalibrationDefinition,
+        CalibrationProfile,
+        CalibrationProfileRegistry,
+        CalibrationStrategyType,
+        IsotonicCalibrationParameters,
+        PlattScalingParameters,
+        TemperatureScalingParameters,
+    )
+    from src.core.calibration.implementations import (
+        ConfidenceMarginEstimator,
+        EntropyEstimator,
+        IdentityCalibration,
+        IsotonicCalibration,
+        NormalizedVarianceEstimator,
+        PlattScalingCalibration,
+        TemperatureScalingCalibration,
+    )
+    from src.core.exceptions import CalibrationConfigurationError
+
+    # 1. Register estimators
+    estimators = {
+        "ENTROPY": EntropyEstimator(),
+        "CONFIDENCE_MARGIN": ConfidenceMarginEstimator(),
+        "NORMALIZED_VARIANCE": NormalizedVarianceEstimator(),
+    }
+
+    # 2. Register calibration strategies
+    # Define parameters from configuration settings
+    t_val = config.calibration.temperature
+    if t_val <= 0.0 or math.isnan(t_val) or math.isinf(t_val):
+        raise CalibrationConfigurationError(
+            f"Invalid temperature config parameter: {t_val}"
+        )
+
+    p_slope = config.calibration.platt_slope
+    p_intercept = config.calibration.platt_intercept
+    if (
+        math.isnan(p_slope)
+        or math.isinf(p_slope)
+        or math.isnan(p_intercept)
+        or math.isinf(p_intercept)
+    ):
+        raise CalibrationConfigurationError("Platt scaling parameters must be finite.")
+
+    # 3. Construct strategies
+    temp_params = TemperatureScalingParameters(temperature=t_val)
+    temp_def = CalibrationDefinition(
+        strategy=CalibrationStrategyType.TEMPERATURE_SCALING,
+        parameters=temp_params,
+        uncertainty_method="CONFIDENCE_MARGIN",
+    )
+    temp_strategy = TemperatureScalingCalibration(
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"]
+    )
+
+    platt_params = PlattScalingParameters(slope=p_slope, intercept=p_intercept)
+    platt_def = CalibrationDefinition(
+        strategy=CalibrationStrategyType.PLATT_SCALING,
+        parameters=platt_params,
+        uncertainty_method="CONFIDENCE_MARGIN",
+    )
+    platt_strategy = PlattScalingCalibration(
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"]
+    )
+
+    isotonic_params = IsotonicCalibrationParameters(
+        x_thresholds=(0.0, 0.5, 1.0),
+        y_values=(0.0, 0.5, 1.0),
+    )
+    isotonic_def = CalibrationDefinition(
+        strategy=CalibrationStrategyType.ISOTONIC_CALIBRATION,
+        parameters=isotonic_params,
+        uncertainty_method="CONFIDENCE_MARGIN",
+    )
+    isotonic_strategy = IsotonicCalibration(
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"]
+    )
+
+    identity_def = CalibrationDefinition(
+        strategy=CalibrationStrategyType.IDENTITY,
+        parameters=None,
+        uncertainty_method="CONFIDENCE_MARGIN",
+    )
+    identity_strategy = IdentityCalibration(
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"]
+    )
+
+    p_identity = CalibrationProfile(
+        profile_id="identity",
+        definition=identity_def,
+        strategy=identity_strategy,
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"],
+    )
+    p_temperature = CalibrationProfile(
+        profile_id="temperature_scaling",
+        definition=temp_def,
+        strategy=temp_strategy,
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"],
+    )
+    p_platt = CalibrationProfile(
+        profile_id="platt_scaling",
+        definition=platt_def,
+        strategy=platt_strategy,
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"],
+    )
+    p_isotonic = CalibrationProfile(
+        profile_id="isotonic_calibration",
+        definition=isotonic_def,
+        strategy=isotonic_strategy,
+        uncertainty_estimator=estimators["CONFIDENCE_MARGIN"],
+    )
+
+    try:
+        registry = CalibrationProfileRegistry(
+            profiles=(p_identity, p_temperature, p_platt, p_isotonic)
+        )
+    except Exception as e:
+        raise CalibrationConfigurationError(
+            f"Calibration registry validation failed: {e}"
+        ) from e
+
+    return registry
 
 
 def build_uncertainty_registry(config: AppConfig) -> UncertaintyProfileRegistry:

@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     aggregation: "AggregationSettings" = Field(
         default_factory=lambda: AggregationSettings()
     )
+    calibration: "CalibrationSettings" = Field(
+        default_factory=lambda: CalibrationSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -82,6 +85,15 @@ class AggregationSettings(BaseModel):
     contradiction_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
     default_strategy: str = Field(default="MAX_CONFIDENCE")
     default_weigher: str = Field(default="default")
+
+
+class CalibrationSettings(BaseModel):
+    """Configuration settings for confidence calibration."""
+
+    default_strategy: str = Field(default="IDENTITY")
+    temperature: float = Field(default=1.5, gt=0.0)
+    platt_slope: float = Field(default=1.0)
+    platt_intercept: float = Field(default=0.0)
 
 
 settings = Settings()
