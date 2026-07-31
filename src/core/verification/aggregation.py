@@ -3,12 +3,13 @@
 from typing import Protocol, runtime_checkable
 
 from src.core.verification.verification_models import (
+    ClaimVerificationInput,
     PassageVerificationResult,
-    VerificationDefinition,
     VerificationExplanation,
     VerificationModelMetadata,
     VerificationResult,
     VerificationVerdict,
+    VerifierRuntimeMetadata,
 )
 
 
@@ -18,17 +19,17 @@ class BaseAggregationStrategy(Protocol):
 
     def aggregate(
         self,
+        verification_input: ClaimVerificationInput,
         passage_results: tuple[PassageVerificationResult, ...],
-        definition: VerificationDefinition,
-        model_metadata: VerificationModelMetadata | None = None,
+        runtime_metadata: VerifierRuntimeMetadata | None = None,
     ) -> VerificationResult:
         """
         Aggregates passage verification results deterministically.
 
         Receives:
+        - verification_input: Input specifications for claim verification.
         - passage_results: Tuple of PassageVerificationResult objects.
-        - definition: VerificationDefinition parameters.
-        - model_metadata: Optional model execution metadata.
+        - runtime_metadata: Optional model runtime metadata.
 
         Returns:
         - VerificationResult: Immutable final claim-level verdict.
@@ -45,13 +46,23 @@ class MaxConfidenceAggregationStrategy(BaseAggregationStrategy):
 
     def aggregate(
         self,
+        verification_input: ClaimVerificationInput,
         passage_results: tuple[PassageVerificationResult, ...],
-        definition: VerificationDefinition,
-        model_metadata: VerificationModelMetadata | None = None,
+        runtime_metadata: VerifierRuntimeMetadata | None = None,
     ) -> VerificationResult:
-        if model_metadata is None:
+        definition = verification_input.definition
+
+        if runtime_metadata is None:
             model_metadata = VerificationModelMetadata(
                 model_identifier=definition.verifier_model
+            )
+        else:
+            model_metadata = VerificationModelMetadata(
+                model_identifier=runtime_metadata.model_id,
+                revision=runtime_metadata.revision,
+                tokenizer=runtime_metadata.tokenizer,
+                execution_device=str(runtime_metadata.execution_device),
+                framework_version=runtime_metadata.framework,
             )
 
         if not passage_results:

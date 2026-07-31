@@ -280,15 +280,60 @@ def build_retrieval_registry(config: AppConfig) -> RetrievalProfileRegistry:
 
 
 def build_verification_registry(config: AppConfig) -> VerificationProfileRegistry:
-    """Builds the verification registry."""
-    engine = NLIVerifier(model=DummyNLIModel(), strategy_id="dummy_nli")
-    definition = NLIVerificationDefinition(top_k=5)
-    profile = VerificationProfile(
-        profile_id="default_verification",
-        definition=definition,
-        verifier=engine,
+    """Builds the verification registry with fail-fast validation checks."""
+    from src.core.exceptions import VerificationConfigurationError
+    from src.core.verification.aggregation import MaxConfidenceAggregationStrategy
+    from src.core.verification.implementations import DefaultMetadataProvider
+    from src.core.verification.verification_models import (
+        ProbabilitySchema,
+        VerificationProfileRegistry,
     )
-    return VerificationProfileRegistry(profiles=(profile,))
+
+    # 1. Register verifiers
+    engine = NLIVerifier(model=DummyNLIModel(), strategy_id="dummy_nli")
+
+    # 2. Register metadata providers
+    metadata_provider = DefaultMetadataProvider(model_id="nli-default")
+
+    # 3. Register probability schema
+    prob_schema = ProbabilitySchema(
+        supported_labels=("SUPPORTED", "CONTRADICTED", "INSUFFICIENT"),
+        probability_ordering=("SUPPORTED", "CONTRADICTED", "INSUFFICIENT"),
+        tolerance=1e-5,
+    )
+
+    # 4. Register aggregation strategies
+    agg_strategy = MaxConfidenceAggregationStrategy()
+
+    # 5. Construct definitions
+    definition = NLIVerificationDefinition(
+        top_k=5,
+        probability_schema=prob_schema,
+        aggregation_strategy=agg_strategy,
+    )
+
+    # Build and validate profile
+    try:
+        profile = VerificationProfile(
+            profile_id="default_verification",
+            definition=definition,
+            verifier=engine,
+            metadata_provider=metadata_provider,
+        )
+    except Exception as e:
+        raise VerificationConfigurationError(
+            f"Verification profile initialization failed: {e}"
+        ) from e
+
+    # Create and return registry (which validates profile uniqueness internally)
+    try:
+        registry = VerificationProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise VerificationConfigurationError(
+            f"Verification registry initialization failed: {e}"
+        ) from e
+
+    return registry
 
 
 def build_failure_analysis_registry(

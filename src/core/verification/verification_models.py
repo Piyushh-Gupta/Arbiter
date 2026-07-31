@@ -1,5 +1,7 @@
 """Immutable domain models for the Verification subsystem."""
 
+import math
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -52,6 +54,117 @@ LABEL_TO_VERDICT: dict[Any, VerificationVerdict] = {
 }
 
 
+class ExecutionDevice(str, Enum):
+    """Supported execution devices for verification runtime."""
+
+    CPU = "CPU"
+    CUDA = "CUDA"
+    MPS = "MPS"
+    TPU = "TPU"
+    OTHER = "OTHER"
+
+
+class ProbabilitySchema(BaseModel):
+    """Immutable schema describing expected probability distribution."""
+
+    supported_labels: tuple[str, ...] = Field(
+        default=("SUPPORTED", "CONTRADICTED", "INSUFFICIENT"),
+        description="Ordered list of supported labels.",
+    )
+    probability_ordering: tuple[str, ...] = Field(
+        default=("SUPPORTED", "CONTRADICTED", "INSUFFICIENT"),
+        description="Mapping / ordering of probabilities.",
+    )
+    tolerance: float = Field(default=1e-5, description="Sum validation tolerance.")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class PassageVerificationScore(BaseModel):
+    """Immutable verification score container."""
+
+    entailment_probability: float = Field(..., description="Probability of entailment.")
+    contradiction_probability: float = Field(
+        ..., description="Probability of contradiction."
+    )
+    neutral_probability: float = Field(..., description="Probability of neutral.")
+
+    model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_probabilities_before(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, (int, float)):
+                    fv = float(v)
+                    if math.isnan(fv):
+                        raise ValueError(f"Value for {k} cannot be NaN.")
+                    if math.isinf(fv):
+                        raise ValueError(f"Value for {k} cannot be infinite.")
+        return data
+
+    @model_validator(mode="after")
+    def validate_probabilities(self) -> "PassageVerificationScore":
+        for name, val in [
+            ("entailment_probability", self.entailment_probability),
+            ("contradiction_probability", self.contradiction_probability),
+            ("neutral_probability", self.neutral_probability),
+        ]:
+            if math.isnan(val) or math.isinf(val):
+                raise ValueError(f"Value for {name} must be finite.")
+            if not (0.0 <= val <= 1.0):
+                raise ValueError(f"Value for {name} must be in [0.0, 1.0], got {val}")
+
+        total = (
+            self.entailment_probability
+            + self.contradiction_probability
+            + self.neutral_probability
+        )
+        if abs(total - 1.0) > 1e-5:
+            raise ValueError(
+                f"Probabilities must sum to 1.0 (with 1e-5 tolerance), got {total}"
+            )
+        return self
+
+    def conforms_to_schema(self, schema: ProbabilitySchema) -> bool:
+        """Checks if this score conforms to the active schema."""
+        total = (
+            self.entailment_probability
+            + self.contradiction_probability
+            + self.neutral_probability
+        )
+        if abs(total - 1.0) > schema.tolerance:
+            return False
+        for val in [
+            self.entailment_probability,
+            self.contradiction_probability,
+            self.neutral_probability,
+        ]:
+            if not (0.0 <= val <= 1.0) or math.isnan(val) or math.isinf(val):
+                return False
+        return True
+
+    def validate_against_schema(self, schema: ProbabilitySchema) -> None:
+        """Validates that this score conforms to the given ProbabilitySchema."""
+        if not self.conforms_to_schema(schema):
+            raise ValueError(
+                "PassageVerificationScore does not conform to the active ProbabilitySchema."
+            )
+
+
+class PassageVerificationMetadata(BaseModel):
+    """Strongly typed metadata for passage verification."""
+
+    model_version: str = Field(default="1.0", description="Model version.")
+    inference_precision: str = Field(default="fp32", description="Inference precision.")
+    device_used: ExecutionDevice = Field(
+        default=ExecutionDevice.CPU, description="Device used."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
 class PassageVerificationResult(BaseModel):
     """Immutable per-passage verification outcome."""
 
@@ -62,14 +175,28 @@ class PassageVerificationResult(BaseModel):
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Passage-level confidence score."
     )
-    raw_scores: dict[str, float] | None = Field(
-        default=None, description="Optional raw class scores."
+    probability_distribution: PassageVerificationScore = Field(
+        ..., description="Verification probability distribution."
     )
     rationale: str | None = Field(
         default=None, description="Optional rationale for passage verdict."
     )
+    latency: float | None = Field(default=None, description="Latency in seconds.")
+    metadata: PassageVerificationMetadata = Field(
+        default_factory=PassageVerificationMetadata,
+        description="Strongly typed passage verification metadata.",
+    )
 
     model_config = ConfigDict(frozen=True)
+
+    @property
+    def raw_scores(self) -> dict[str, float]:
+        """Backward compatibility helper property."""
+        return {
+            "SUPPORTED": self.probability_distribution.entailment_probability,
+            "CONTRADICTED": self.probability_distribution.contradiction_probability,
+            "INSUFFICIENT": self.probability_distribution.neutral_probability,
+        }
 
 
 class VerifiedPassage(BaseModel):
@@ -162,6 +289,10 @@ class VerificationDefinition(BaseModel):
     top_k: int = Field(
         default=5, gt=0, description="Maximum passages to evaluate from bundle."
     )
+    probability_schema: ProbabilitySchema = Field(
+        default_factory=ProbabilitySchema,
+        description="Active probability schema description.",
+    )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
@@ -170,6 +301,108 @@ class NLIVerificationDefinition(VerificationDefinition):
     """Immutable configuration specifically for NLI verification execution."""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class VerificationExecutionMetadata(BaseModel):
+    """Immutable metadata model describing the execution specifics of a verification request."""
+
+    request_id: str = Field(..., description="Execution request identifier.")
+    execution_duration: float = Field(..., description="Execution duration in seconds.")
+    verifier_profile: str = Field(..., description="Name of the verifier profile.")
+    aggregation_profile: str = Field(
+        ..., description="Name of the aggregation profile."
+    )
+    configuration_fingerprint: str = Field(
+        ..., description="SHA-256 fingerprint of the configuration."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class PassageVerificationInput(BaseModel):
+    """Immutable input arguments required to verify a single evidence passage."""
+
+    claim: str = Field(..., description="The textual assertion to evaluate.")
+    passage: Any = Field(..., description="The evidence passage object.")
+    execution_metadata: VerificationExecutionMetadata = Field(
+        ..., description="Execution provenance."
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class ClaimVerificationInput(BaseModel):
+    """Immutable input arguments required to verify a claim against a bundle of evidence."""
+
+    claim: str = Field(..., description="The textual assertion to evaluate.")
+    bundle: Any = Field(..., description="The evidence bundle containing passages.")
+    definition: VerificationDefinition = Field(
+        ..., description="Execution configuration options."
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class AggregationMetadata(BaseModel):
+    """Immutable metadata summarizing the aggregation details."""
+
+    strategy_id: str = Field(..., description="The aggregation strategy used.")
+    thresholds_applied: dict[str, float] = Field(
+        default_factory=dict, description="Configuration thresholds applied."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ClaimVerificationContext(BaseModel):
+    """Immutable context encapsulating the intermediate elements of verification execution."""
+
+    ordered_passage_results: tuple[PassageVerificationResult, ...] = Field(
+        ..., description="Ordered passage outcomes."
+    )
+    aggregation_metadata: AggregationMetadata = Field(
+        ..., description="Strongly typed aggregation metadata."
+    )
+    execution_metadata: VerificationExecutionMetadata = Field(
+        ..., description="Execution provenance."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class VerifierRuntimeMetadata(BaseModel):
+    """Immutable environment and model identifier information."""
+
+    model_id: str = Field(..., description="Unique model identifier.")
+    revision: str = Field(..., description="Git commit hash or revision.")
+    tokenizer: str = Field(..., description="Tokenizer identifier.")
+    framework: str = Field(..., description="Deep learning framework used.")
+    execution_device: ExecutionDevice = Field(
+        ..., description="Platform hardware target."
+    )
+    inference_precision: str = Field(
+        ..., description="Precision string, e.g. fp16, fp32."
+    )
+    execution_timestamp: datetime = Field(
+        ..., description="Timezone-aware execution timestamp."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def validate_timezone_aware(self) -> "VerifierRuntimeMetadata":
+        if (
+            self.execution_timestamp.tzinfo is None
+            or self.execution_timestamp.tzinfo.utcoffset(self.execution_timestamp)
+            is None
+        ):
+            raise ValueError("execution_timestamp must be timezone-aware.")
+        return self
+
+    @property
+    def model_identifier(self) -> str:
+        """Backward compatibility helper property."""
+        return self.model_id
 
 
 class VerificationResult(BaseModel):
@@ -247,12 +480,41 @@ class VerificationProfile(BaseModel):
     verifier: BaseVerifier = Field(
         ..., description="The executable verifier strategy resolving the definition."
     )
+    metadata_provider: Any = Field(
+        default=None,
+        description="The metadata provider strategy associated with this profile.",
+    )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
     def _validate_compatibility(self) -> "VerificationProfile":
+        # 1. Verifier compatibility
         self.verifier.validate_compatibility(self.definition)
+
+        # 2. Aggregation strategy compatibility
+        from src.core.verification.aggregation import BaseAggregationStrategy
+
+        agg = self.definition.aggregation_strategy
+        if agg is not None and not isinstance(agg, str):
+            if not isinstance(agg, BaseAggregationStrategy):
+                raise ValueError(
+                    "aggregation_strategy must implement BaseAggregationStrategy protocol."
+                )
+
+        # 3. Probability schema compatibility
+        if self.definition.probability_schema is None:
+            raise ValueError("probability_schema in definition cannot be None.")
+
+        # 4. Metadata provider compatibility
+        from src.core.verification.base import BaseMetadataProvider
+
+        if self.metadata_provider is not None:
+            if not isinstance(self.metadata_provider, BaseMetadataProvider):
+                raise ValueError(
+                    "metadata_provider must implement BaseMetadataProvider protocol."
+                )
+
         return self
 
 

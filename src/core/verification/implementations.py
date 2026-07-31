@@ -1,6 +1,7 @@
 """Concrete implementations for the Verification subsystem."""
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from typing import Any, Protocol, runtime_checkable
 
 from src.core.exceptions import (
@@ -15,15 +16,19 @@ from src.core.verification.aggregation import (
 from src.core.verification.verification_models import (
     LABEL_TO_VERDICT,
     VERDICT_TO_LABEL,
+    ClaimVerificationInput,
+    ExecutionDevice,
     NLIVerificationDefinition,
+    PassageVerificationMetadata,
     PassageVerificationResult,
+    PassageVerificationScore,
     VerificationDefinition,
     VerificationLabel,
     VerificationMetadata,
-    VerificationModelMetadata,
     VerificationResult,
     VerificationVerdict,
     VerifiedPassage,
+    VerifierRuntimeMetadata,
 )
 
 
@@ -45,6 +50,24 @@ class NLIModel(Protocol):
         Returns list[tuple[float, float, float]]: (p_supports, p_refutes, p_nei).
         """
         ...
+
+
+class DefaultMetadataProvider:
+    """Default implementation of metadata provider."""
+
+    def __init__(self, model_id: str = "nli-default"):
+        self.model_id = model_id
+
+    def get_runtime_metadata(self) -> VerifierRuntimeMetadata:
+        return VerifierRuntimeMetadata(
+            model_id=self.model_id,
+            revision="1.0",
+            tokenizer="default",
+            framework="pytorch",
+            execution_device=ExecutionDevice.CPU,
+            inference_precision="fp32",
+            execution_timestamp=datetime.now(timezone.utc),
+        )
 
 
 class NLIVerifier:
@@ -104,30 +127,49 @@ class NLIVerifier:
 
         passage_results: list[PassageVerificationResult] = []
         for passage, triplet in zip(passages_to_score, raw_predictions):
-            p_supports = float(max(0.0, min(1.0, triplet[idx_supports])))
-            p_refutes = float(max(0.0, min(1.0, triplet[idx_refutes])))
-            p_nei = float(max(0.0, min(1.0, triplet[idx_nei])))
+            p_supports_raw = float(max(0.0, min(1.0, triplet[idx_supports])))
+            p_refutes_raw = float(max(0.0, min(1.0, triplet[idx_refutes])))
+            p_nei_raw = float(max(0.0, min(1.0, triplet[idx_nei])))
 
-            if p_supports >= p_refutes and p_supports >= p_nei:
+            # Determine verdict and raw confidence
+            if p_supports_raw >= p_refutes_raw and p_supports_raw >= p_nei_raw:
                 verdict = VerificationVerdict.SUPPORTED
-                conf = p_supports
-            elif p_refutes > p_supports and p_refutes >= p_nei:
+                conf = p_supports_raw
+            elif p_refutes_raw > p_supports_raw and p_refutes_raw >= p_nei_raw:
                 verdict = VerificationVerdict.CONTRADICTED
-                conf = p_refutes
+                conf = p_refutes_raw
             else:
                 verdict = VerificationVerdict.INSUFFICIENT
-                conf = p_nei
+                conf = p_nei_raw
+
+            # Calculate normalized probabilities for the score distribution
+            total = p_supports_raw + p_refutes_raw + p_nei_raw
+            if total > 0.0:
+                p_supports = p_supports_raw / total
+                p_refutes = p_refutes_raw / total
+                p_nei = p_nei_raw / total
+            else:
+                p_supports, p_refutes, p_nei = 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
+
+            score = PassageVerificationScore(
+                entailment_probability=p_supports,
+                contradiction_probability=p_refutes,
+                neutral_probability=p_nei,
+            )
 
             passage_results.append(
                 PassageVerificationResult(
                     span_id=passage.span_id,
                     verdict=verdict,
                     confidence=max(0.0, min(1.0, conf)),
-                    raw_scores={
-                        "SUPPORTED": p_supports,
-                        "CONTRADICTED": p_refutes,
-                        "INSUFFICIENT": p_nei,
-                    },
+                    probability_distribution=score,
+                    rationale="NLI prediction",
+                    latency=0.01,
+                    metadata=PassageVerificationMetadata(
+                        model_version="1.0",
+                        inference_precision="fp32",
+                        device_used=ExecutionDevice.CPU,
+                    ),
                 )
             )
 
@@ -163,20 +205,31 @@ class NLIVerifier:
 
         passage_results = self.verify_passages(claim, sub_bundle)
 
+        # Validate each score against the active schema in the definition
+        for pr in passage_results:
+            pr.probability_distribution.validate_against_schema(
+                definition.probability_schema
+            )
+
         if isinstance(definition.aggregation_strategy, BaseAggregationStrategy):
             strategy = definition.aggregation_strategy
         else:
             strategy = MaxConfidenceAggregationStrategy()
 
-        metadata = VerificationModelMetadata(
-            model_identifier=definition.verifier_model,
-            revision="1.0",
-            tokenizer="default",
-            execution_device="cpu",
-            framework_version="1.0.0",
+        metadata_provider = DefaultMetadataProvider(model_id=definition.verifier_model)
+        runtime_metadata = metadata_provider.get_runtime_metadata()
+
+        claim_input = ClaimVerificationInput(
+            claim=claim,
+            bundle=sub_bundle,
+            definition=definition,
         )
 
-        res = strategy.aggregate(passage_results, definition, model_metadata=metadata)
+        res = strategy.aggregate(
+            verification_input=claim_input,
+            passage_results=passage_results,
+            runtime_metadata=runtime_metadata,
+        )
 
         legacy_verified: list[VerifiedPassage] = []
         for p, pr in zip(passages_to_score, passage_results):

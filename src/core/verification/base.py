@@ -7,7 +7,22 @@ from src.core.verification.verification_models import (
     PassageVerificationResult,
     VerificationDefinition,
     VerificationResult,
+    VerifierRuntimeMetadata,
 )
+
+
+@runtime_checkable
+class BaseMetadataProvider(Protocol):
+    """Protocol for verification metadata providers."""
+
+    def get_runtime_metadata(self) -> VerifierRuntimeMetadata:
+        """
+        Retrieves the current verifier runtime metadata.
+
+        Returns:
+            VerifierRuntimeMetadata: Timezone-aware execution and system details.
+        """
+        ...
 
 
 @runtime_checkable

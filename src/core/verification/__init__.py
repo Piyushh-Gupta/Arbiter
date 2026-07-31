@@ -4,12 +4,21 @@ from src.core.verification.aggregation import (
     BaseAggregationStrategy,
     MaxConfidenceAggregationStrategy,
 )
-from src.core.verification.base import BaseVerifier
-from src.core.verification.implementations import NLIVerifier
+from src.core.verification.base import BaseMetadataProvider, BaseVerifier
+from src.core.verification.implementations import DefaultMetadataProvider, NLIVerifier
 from src.core.verification.verification_models import (
+    AggregationMetadata,
+    ClaimVerificationContext,
+    ClaimVerificationInput,
+    ExecutionDevice,
     NLIVerificationDefinition,
+    PassageVerificationInput,
+    PassageVerificationMetadata,
     PassageVerificationResult,
+    PassageVerificationScore,
+    ProbabilitySchema,
     VerificationDefinition,
+    VerificationExecutionMetadata,
     VerificationExplanation,
     VerificationLabel,
     VerificationMetadata,
@@ -19,15 +28,28 @@ from src.core.verification.verification_models import (
     VerificationResult,
     VerificationVerdict,
     VerifiedPassage,
+    VerifierRuntimeMetadata,
 )
 
 __all__ = [
     "BaseAggregationStrategy",
     "BaseVerifier",
+    "BaseMetadataProvider",
+    "DefaultMetadataProvider",
     "MaxConfidenceAggregationStrategy",
     "NLIVerificationDefinition",
     "NLIVerifier",
+    "ExecutionDevice",
+    "ProbabilitySchema",
+    "PassageVerificationScore",
+    "PassageVerificationMetadata",
     "PassageVerificationResult",
+    "PassageVerificationInput",
+    "ClaimVerificationInput",
+    "AggregationMetadata",
+    "ClaimVerificationContext",
+    "VerifierRuntimeMetadata",
+    "VerificationExecutionMetadata",
     "VerificationDefinition",
     "VerificationExplanation",
     "VerificationLabel",
