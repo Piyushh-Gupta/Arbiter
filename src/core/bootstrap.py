@@ -756,6 +756,58 @@ def build_benchmark_registry(config: AppConfig) -> BenchmarkProfileRegistry:
     return BenchmarkProfileRegistry(profiles=(profile,))
 
 
+def build_verification_benchmark_registry(config: AppConfig) -> Any:
+    """Builds and validates the verification benchmark profile registry."""
+    from src.core.benchmark.benchmark_models import (
+        BenchmarkDefinition,
+        BenchmarkMetricType,
+        BenchmarkProfile,
+        BenchmarkProfileRegistry,
+    )
+    from src.core.exceptions import BenchmarkConfigurationError
+
+    selected_metrics = (
+        BenchmarkMetricType.ACCURACY,
+        BenchmarkMetricType.PRECISION,
+        BenchmarkMetricType.RECALL,
+        BenchmarkMetricType.F1,
+        BenchmarkMetricType.MACRO_F1,
+        BenchmarkMetricType.MICRO_F1,
+        BenchmarkMetricType.ECE,
+        BenchmarkMetricType.MCE,
+        BenchmarkMetricType.BRIER_SCORE,
+        BenchmarkMetricType.NEGATIVE_LOG_LIKELIHOOD,
+        BenchmarkMetricType.MEAN_LATENCY,
+        BenchmarkMetricType.P95_LATENCY,
+        BenchmarkMetricType.P99_LATENCY,
+        BenchmarkMetricType.THROUGHPUT,
+        BenchmarkMetricType.ABSTENTION_RATE,
+        BenchmarkMetricType.LOW_CONFIDENCE_RATE,
+        BenchmarkMetricType.CONFLICT_RATE,
+    )
+
+    default_def = BenchmarkDefinition(
+        benchmark_name="default_verification_benchmark",
+        dataset_identifier="FEVER",
+        selected_metrics=selected_metrics,
+        evaluation_profile_id="default_verification",
+    )
+
+    profile = BenchmarkProfile(
+        profile_id="default_benchmark",
+        definition=default_def,
+    )
+
+    try:
+        registry = BenchmarkProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise BenchmarkConfigurationError(
+            f"Benchmark registry validation failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_optimization_registry(config: AppConfig) -> OptimizationProfileRegistry:
     """Builds the optimization profile registry."""
     from src.core.retrieval.optimization import (

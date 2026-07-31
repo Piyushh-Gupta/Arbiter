@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     calibration: "CalibrationSettings" = Field(
         default_factory=lambda: CalibrationSettings()
     )
+    benchmark: "BenchmarkSettings" = Field(default_factory=lambda: BenchmarkSettings())
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -94,6 +95,13 @@ class CalibrationSettings(BaseModel):
     temperature: float = Field(default=1.5, gt=0.0)
     platt_slope: float = Field(default=1.0)
     platt_intercept: float = Field(default=0.0)
+
+
+class BenchmarkSettings(BaseModel):
+    """Configuration settings for offline benchmarking."""
+
+    default_profile: str = Field(default="default_benchmark")
+    dataset_base_path: str = Field(default="data/benchmark")
 
 
 settings = Settings()

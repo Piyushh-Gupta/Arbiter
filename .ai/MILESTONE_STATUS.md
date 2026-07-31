@@ -111,3 +111,4 @@
 - [x] M2.3 Natural Language Inference (NLI) Verification Engine
 - [x] M2.4 Multi-Evidence Aggregation
 - [x] M2.5 Confidence Calibration & Uncertainty Estimation
+- [x] M2.6 Verification Benchmarking & Evaluation Framework
