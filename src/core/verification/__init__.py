@@ -4,12 +4,22 @@ from src.core.verification.aggregation import (
     BaseAggregationStrategy,
     MaxConfidenceAggregationStrategy,
 )
-from src.core.verification.base import BaseMetadataProvider, BaseNLIModel, BaseVerifier
+from src.core.verification.base import (
+    BaseEvidenceWeigher,
+    BaseMetadataProvider,
+    BaseNLIModel,
+    BaseVerifier,
+)
 from src.core.verification.implementations import DefaultMetadataProvider, NLIVerifier
 from src.core.verification.verification_models import (
     AggregationMetadata,
+    AggregationProfile,
+    AggregationProfileRegistry,
+    AggregationStrategyType,
+    AggregationTrace,
     ClaimVerificationContext,
     ClaimVerificationInput,
+    ConflictAnalysis,
     ExecutionDevice,
     NLILabelSchema,
     NLIModelDefinition,
@@ -38,6 +48,7 @@ __all__ = [
     "BaseVerifier",
     "BaseNLIModel",
     "BaseMetadataProvider",
+    "BaseEvidenceWeigher",
     "DefaultMetadataProvider",
     "MaxConfidenceAggregationStrategy",
     "NLIVerificationDefinition",
@@ -65,4 +76,9 @@ __all__ = [
     "VerificationResult",
     "VerificationVerdict",
     "VerifiedPassage",
+    "AggregationStrategyType",
+    "ConflictAnalysis",
+    "AggregationTrace",
+    "AggregationProfile",
+    "AggregationProfileRegistry",
 ]

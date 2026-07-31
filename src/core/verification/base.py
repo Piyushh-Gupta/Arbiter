@@ -14,6 +14,28 @@ from src.core.verification.verification_models import (
 
 
 @runtime_checkable
+class BaseEvidenceWeigher(Protocol):
+    """Protocol for calculating deterministic weights for evidence passages."""
+
+    def compute_weight(
+        self,
+        passage_result: PassageVerificationResult,
+        passage_score: float,
+    ) -> float:
+        """
+        Computes weight for the given passage.
+
+        Args:
+            passage_result: Passage verification result containing verifier confidence.
+            passage_score: Retrieval/reranking score of the passage.
+
+        Returns:
+            float: Deterministic weight.
+        """
+        ...
+
+
+@runtime_checkable
 class BaseNLIModel(Protocol):
     """Stateless protocol for Natural Language Inference (NLI) model backend."""
 

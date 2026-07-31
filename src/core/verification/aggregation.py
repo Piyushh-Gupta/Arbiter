@@ -1,9 +1,12 @@
 """Aggregation strategy abstractions and concrete implementations for verification results."""
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, Sequence, runtime_checkable
 
+from src.core.verification.base import BaseEvidenceWeigher
 from src.core.verification.verification_models import (
+    AggregationTrace,
     ClaimVerificationInput,
+    ConflictAnalysis,
     PassageVerificationResult,
     VerificationExplanation,
     VerificationModelMetadata,
@@ -37,12 +40,42 @@ class BaseAggregationStrategy(Protocol):
         ...
 
 
+class DefaultEvidenceWeigher(BaseEvidenceWeigher):
+    """Default evidence weigher combining retrieval score and verifier confidence."""
+
+    def compute_weight(
+        self,
+        passage_result: PassageVerificationResult,
+        passage_score: float,
+    ) -> float:
+        return float(passage_score) * float(passage_result.confidence)
+
+
+def sort_passage_results(
+    passage_results: Sequence[PassageVerificationResult],
+    bundle_passages: Sequence[Any],
+) -> list[PassageVerificationResult]:
+    """Deterministically orders passage results by retrieval rank, verifier confidence (descending), and span ID (ascending)."""
+    rank_map = {p.span_id: idx for idx, p in enumerate(bundle_passages)}
+
+    def sort_key(pr: PassageVerificationResult) -> tuple[int, float, str]:
+        rank = rank_map.get(pr.span_id, len(bundle_passages))
+        conf = -float(pr.confidence)
+        span_id = pr.span_id
+        return rank, conf, span_id
+
+    return sorted(passage_results, key=sort_key)
+
+
 class MaxConfidenceAggregationStrategy(BaseAggregationStrategy):
     """
     Max-confidence aggregation strategy.
     Determines claim verdict based on maximum confidence across supporting vs contradicting passages,
     thresholded by definition rules.
     """
+
+    def __init__(self, evidence_weigher: BaseEvidenceWeigher | None = None) -> None:
+        self.evidence_weigher = evidence_weigher or DefaultEvidenceWeigher()
 
     def aggregate(
         self,
@@ -82,6 +115,16 @@ class MaxConfidenceAggregationStrategy(BaseAggregationStrategy):
                 model_metadata=model_metadata,
             )
 
+        # 1. Deterministic sort before aggregation
+        ordered_results = sort_passage_results(
+            passage_results, verification_input.bundle.passages
+        )
+
+        passage_scores = {
+            p.span_id: getattr(p, "score", 0.0)
+            for p in verification_input.bundle.passages
+        }
+
         supporting: list[str] = []
         contradicting: list[str] = []
         attribution: dict[str, float] = {}
@@ -90,7 +133,12 @@ class MaxConfidenceAggregationStrategy(BaseAggregationStrategy):
         max_contra_conf = -1.0
         max_insuff_conf = -1.0
 
-        for p_res in passage_results:
+        weighting_decisions = {}
+
+        for p_res in ordered_results:
+            p_score = passage_scores.get(p_res.span_id, 0.0)
+            w = self.evidence_weigher.compute_weight(p_res, p_score)
+            weighting_decisions[p_res.span_id] = w
             attribution[p_res.span_id] = float(p_res.confidence)
 
             if p_res.verdict == VerificationVerdict.SUPPORTED:
@@ -127,14 +175,51 @@ class MaxConfidenceAggregationStrategy(BaseAggregationStrategy):
                 ),
             )
 
+        insufficient = [
+            pr.span_id
+            for pr in ordered_results
+            if pr.verdict == VerificationVerdict.INSUFFICIENT
+        ]
+
+        severity = 0.0
+        if max_supp_conf > 0.0 and max_contra_conf > 0.0:
+            severity = min(max_supp_conf, max_contra_conf) / max(
+                max_supp_conf, max_contra_conf
+            )
+        imbalance = abs(max_supp_conf - max_contra_conf)
+
+        conflict_analysis = ConflictAnalysis(
+            supporting_passages=tuple(supporting),
+            contradicting_passages=tuple(contradicting),
+            insufficient_passages=tuple(insufficient),
+            conflict_severity=severity,
+            confidence_imbalance=imbalance,
+            resolution_rationale=f"Resolved via MaxConfidence. Winner: {final_verdict}.",
+        )
+
+        aggregation_trace = AggregationTrace(
+            aggregation_strategy="MAX_CONFIDENCE",
+            ordered_evaluation_sequence=tuple(pr.span_id for pr in ordered_results),
+            weighting_decisions=weighting_decisions,
+            intermediate_scores={
+                "max_supporting_confidence": max_supp_conf,
+                "max_contradicting_confidence": max_contra_conf,
+                "max_insufficient_confidence": max_insuff_conf,
+            },
+            final_decision_path=f"MaxConfidence determined {final_verdict} with confidence {final_conf}.",
+        )
+
         reasoning_text = (
-            f"Evaluated {len(passage_results)} passage(s). Final verdict {final_verdict.value} "
+            f"Evaluated {len(ordered_results)} passage(s). Final verdict {final_verdict.value} "
             f"with confidence {final_conf:.4f}."
         )
         explanation = VerificationExplanation(
             reasoning=reasoning_text,
             supporting_evidence_references=tuple(supporting),
-            confidence_explanation=f"Selected max confidence matching threshold rules (Supp: {max_supp_conf:.2f}, Contra: {max_contra_conf:.2f}).",
+            confidence_explanation=(
+                f"Selected max confidence matching threshold rules "
+                f"(Supp: {max_supp_conf:.2f}, Contra: {max_contra_conf:.2f})."
+            ),
             uncertainty_explanation=f"Estimated uncertainty is {1.0 - final_conf:.2f}.",
         )
 
@@ -147,4 +232,6 @@ class MaxConfidenceAggregationStrategy(BaseAggregationStrategy):
             explanation=explanation,
             uncertainty=float(1.0 - final_conf),
             model_metadata=model_metadata,
+            aggregation_trace=aggregation_trace,
+            conflict_analysis=conflict_analysis,
         )

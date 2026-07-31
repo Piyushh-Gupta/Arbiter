@@ -373,14 +373,93 @@ def build_verification_registry(config: AppConfig) -> VerificationProfileRegistr
         tolerance=1e-5,
     )
 
-    # 4. Register aggregation strategies
-    agg_strategy = MaxConfidenceAggregationStrategy()
+    # 4. Register aggregation strategies and profiles
+    from src.core.verification.aggregation import DefaultEvidenceWeigher
+    from src.core.verification.aggregation_strategies import (
+        ConsensusAggregationStrategy,
+        ContradictionAwareAggregationStrategy,
+        WeightedVotingAggregationStrategy,
+    )
+    from src.core.verification.verification_models import (
+        AggregationProfile,
+        AggregationProfileRegistry,
+        AggregationStrategyType,
+    )
 
-    # 5. Construct definitions
+    weigher = DefaultEvidenceWeigher()
+
+    consensus_thresh = config.aggregation.consensus_threshold
+    contra_thresh = config.aggregation.contradiction_threshold
+
+    if not (0.0 <= consensus_thresh <= 1.0):
+        raise VerificationConfigurationError(
+            f"Invalid consensus threshold: {consensus_thresh}"
+        )
+    if not (0.0 <= contra_thresh <= 1.0):
+        raise VerificationConfigurationError(
+            f"Invalid contradiction threshold: {contra_thresh}"
+        )
+
+    max_conf_strat = MaxConfidenceAggregationStrategy(evidence_weigher=weigher)
+    weighted_voting_strat = WeightedVotingAggregationStrategy(evidence_weigher=weigher)
+    consensus_strat = ConsensusAggregationStrategy(
+        evidence_weigher=weigher,
+        consensus_threshold=consensus_thresh,
+    )
+    contra_aware_strat = ContradictionAwareAggregationStrategy(
+        evidence_weigher=weigher,
+        contradiction_threshold=contra_thresh,
+    )
+
+    p_max_conf = AggregationProfile(
+        profile_id="max_confidence",
+        strategy_type=AggregationStrategyType.MAX_CONFIDENCE,
+        strategy=max_conf_strat,
+        evidence_weigher=weigher,
+    )
+    p_weighted_voting = AggregationProfile(
+        profile_id="weighted_voting",
+        strategy_type=AggregationStrategyType.WEIGHTED_VOTING,
+        strategy=weighted_voting_strat,
+        evidence_weigher=weigher,
+    )
+    p_consensus = AggregationProfile(
+        profile_id="consensus",
+        strategy_type=AggregationStrategyType.CONSENSUS,
+        strategy=consensus_strat,
+        evidence_weigher=weigher,
+    )
+    p_contra_aware = AggregationProfile(
+        profile_id="contradiction_aware",
+        strategy_type=AggregationStrategyType.CONTRADICTION_AWARE,
+        strategy=contra_aware_strat,
+        evidence_weigher=weigher,
+    )
+
+    try:
+        agg_registry = AggregationProfileRegistry(
+            profiles=(p_max_conf, p_weighted_voting, p_consensus, p_contra_aware)
+        )
+    except Exception as e:
+        raise VerificationConfigurationError(
+            f"Aggregation registry validation failed: {e}"
+        ) from e
+
+    # 5. Resolve active strategy configuration
+    default_strategy_name = config.aggregation.default_strategy
+    try:
+        agg_profile = agg_registry.resolve(default_strategy_name.lower())
+    except KeyError:
+        try:
+            agg_profile = agg_registry.resolve(default_strategy_name)
+        except KeyError:
+            agg_profile = p_max_conf
+
+    # 6. Construct definitions
     definition = NLIVerificationDefinition(
         top_k=5,
         probability_schema=prob_schema,
-        aggregation_strategy=agg_strategy,
+        aggregation_strategy=agg_profile.strategy,
     )
 
     # Build and validate profile

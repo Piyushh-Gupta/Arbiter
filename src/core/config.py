@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     db: DatabaseSettings = DatabaseSettings()
     log: LoggingSettings = LoggingSettings()
     nli: "NLIVerifierSettings" = Field(default_factory=lambda: NLIVerifierSettings())
+    aggregation: "AggregationSettings" = Field(
+        default_factory=lambda: AggregationSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -70,6 +73,15 @@ class NLIVerifierSettings(BaseModel):
     precision: str = Field(default="fp32")
     max_sequence_length: int = Field(default=512)
     batch_size: int = Field(default=8)
+
+
+class AggregationSettings(BaseModel):
+    """Configuration settings for multi-evidence aggregation."""
+
+    consensus_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    contradiction_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
+    default_strategy: str = Field(default="MAX_CONFIDENCE")
+    default_weigher: str = Field(default="default")
 
 
 settings = Settings()

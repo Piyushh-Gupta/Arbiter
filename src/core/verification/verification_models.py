@@ -5,7 +5,14 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    computed_field,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from src.core.retrieval.retrieval_models import EvidenceBundle, EvidencePassage
@@ -479,6 +486,130 @@ class VerifierRuntimeMetadata(BaseModel):
         return self.model_id
 
 
+class AggregationStrategyType(str, Enum):
+    """Supported multi-evidence aggregation strategy types."""
+
+    MAX_CONFIDENCE = "MAX_CONFIDENCE"
+    WEIGHTED_VOTING = "WEIGHTED_VOTING"
+    CONSENSUS = "CONSENSUS"
+    CONTRADICTION_AWARE = "CONTRADICTION_AWARE"
+
+
+class ConflictAnalysis(BaseModel):
+    """Immutable analysis capturing conflicting evidence categories and metrics."""
+
+    supporting_passages: tuple[str, ...] = Field(
+        default_factory=tuple, description="Span IDs supporting the claim."
+    )
+    contradicting_passages: tuple[str, ...] = Field(
+        default_factory=tuple, description="Span IDs contradicting the claim."
+    )
+    insufficient_passages: tuple[str, ...] = Field(
+        default_factory=tuple, description="Span IDs with insufficient evidence."
+    )
+    conflict_severity: float = Field(
+        default=0.0, description="Severity of contradiction conflict in range [0, 1]."
+    )
+    confidence_imbalance: float = Field(
+        default=0.0,
+        description="Confidence imbalance/delta between supporting and contradicting evidence.",
+    )
+    resolution_rationale: str = Field(
+        default="", description="Detailed rationale explaining conflict resolution."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class AggregationTrace(BaseModel):
+    """Immutable execution trace documenting intermediate steps of multi-evidence aggregation."""
+
+    aggregation_strategy: str = Field(
+        ..., description="The name of the aggregation strategy used."
+    )
+    ordered_evaluation_sequence: tuple[str, ...] = Field(
+        ..., description="Span IDs in the exact order they were evaluated."
+    )
+    weighting_decisions: dict[str, float] = Field(
+        ..., description="Weight mapped to each span ID."
+    )
+    intermediate_scores: dict[str, Any] = Field(
+        ..., description="Intermediate scores computed during aggregation."
+    )
+    final_decision_path: str = Field(
+        ..., description="Detailed path leading to final verdict decision."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class AggregationProfile(BaseModel):
+    """Immutable wrapper binding a named aggregation configuration to its strategy."""
+
+    profile_id: str = Field(
+        ..., description="Unique identifier for this aggregation profile."
+    )
+    strategy_type: AggregationStrategyType = Field(
+        ..., description="The type of aggregation strategy."
+    )
+    strategy: Any = Field(
+        ...,
+        description="The executable aggregation strategy (BaseAggregationStrategy).",
+    )
+    evidence_weigher: Any = Field(
+        default=None,
+        description="The evidence weigher associated (BaseEvidenceWeigher).",
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> "AggregationProfile":
+        from src.core.verification.aggregation import BaseAggregationStrategy
+        from src.core.verification.base import BaseEvidenceWeigher
+
+        if not isinstance(self.strategy, BaseAggregationStrategy):
+            raise ValueError(
+                "strategy must implement BaseAggregationStrategy protocol."
+            )
+        if self.evidence_weigher is not None and not isinstance(
+            self.evidence_weigher, BaseEvidenceWeigher
+        ):
+            raise ValueError(
+                "evidence_weigher must implement BaseEvidenceWeigher protocol."
+            )
+        return self
+
+
+class AggregationProfileRegistry(BaseModel):
+    """Immutable registry for named aggregation profiles."""
+
+    profiles: tuple[AggregationProfile, ...] = Field(
+        ..., min_length=1, description="Collection of registered aggregation profiles."
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def validate_unique_profiles(self) -> "AggregationProfileRegistry":
+        seen = set()
+        for p in self.profiles:
+            if p.profile_id in seen:
+                raise ValueError(f"Duplicate profile_id '{p.profile_id}' in registry.")
+            seen.add(p.profile_id)
+        return self
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def _by_id(self) -> dict[str, AggregationProfile]:
+        return {p.profile_id: p for p in self.profiles}
+
+    def resolve(self, profile_id: str) -> AggregationProfile:
+        if profile_id not in self._by_id:
+            raise KeyError(f"Aggregation profile '{profile_id}' not found in registry.")
+        return self._by_id[profile_id]
+
+
 class VerificationResult(BaseModel):
     """Immutable, self-contained outcome of claim verification."""
 
@@ -510,6 +641,12 @@ class VerificationResult(BaseModel):
             model_identifier="nli-default"
         ),
         description="Execution model environment metadata.",
+    )
+    aggregation_trace: AggregationTrace | None = Field(
+        default=None, description="Optional deterministic aggregation execution trace."
+    )
+    conflict_analysis: ConflictAnalysis | None = Field(
+        default=None, description="Optional conflict details and resolution rationale."
     )
 
     # Legacy fields for backward compatibility with M1 pipeline
