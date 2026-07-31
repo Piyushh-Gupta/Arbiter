@@ -49,9 +49,12 @@ from src.core.uncertainty.uncertainty_models import (
     UncertaintyProfileRegistry,
 )
 from src.core.validation import validate_startup
+from src.core.verification.base import BaseNLIModel
 from src.core.verification.implementations import NLIVerifier
 from src.core.verification.verification_models import (
     NLIVerificationDefinition,
+    PassageVerificationInput,
+    PassageVerificationScore,
     VerificationProfile,
     VerificationProfileRegistry,
     VerificationVerdict,
@@ -72,9 +75,18 @@ class DummyNLIModel:
         }
 
     def predict(
-        self, claim: str, passages: Sequence[str]
-    ) -> list[tuple[float, float, float]]:
-        return [(1.0, 0.0, 0.0) for _ in passages]
+        self, batch: tuple[PassageVerificationInput, ...]
+    ) -> tuple[PassageVerificationScore, ...]:
+        from src.core.verification.verification_models import PassageVerificationScore
+
+        return tuple(
+            PassageVerificationScore(
+                entailment_probability=1.0,
+                contradiction_probability=0.0,
+                neutral_probability=0.0,
+            )
+            for _ in batch
+        )
 
 
 def _create_required_directories() -> None:
@@ -290,7 +302,66 @@ def build_verification_registry(config: AppConfig) -> VerificationProfileRegistr
     )
 
     # 1. Register verifiers
-    engine = NLIVerifier(model=DummyNLIModel(), strategy_id="dummy_nli")
+    # Decide if we load DummyNLIModel (fallback for test env) or actual TransformerNLIModel
+    engine_model: BaseNLIModel
+    if (
+        config.environment == "test"
+        and config.nli.model_id == "cross-encoder/nli-distilroberta-base"
+    ):
+        engine_model = DummyNLIModel()
+    else:
+        from src.core.verification.nli_model import TransformerNLIModel
+        from src.core.verification.verification_models import (
+            ExecutionDevice,
+            NLILabelSchema,
+            NLIModelDefinition,
+        )
+
+        dev_str = str(config.nli.device).upper()
+        if dev_str == "CPU":
+            device_enum = ExecutionDevice.CPU
+        elif dev_str in ("CUDA", "GPU"):
+            device_enum = ExecutionDevice.CUDA
+        elif dev_str == "MPS":
+            device_enum = ExecutionDevice.MPS
+        elif dev_str == "TPU":
+            device_enum = ExecutionDevice.TPU
+        else:
+            device_enum = ExecutionDevice.OTHER
+
+        model_def = NLIModelDefinition(
+            model_identifier=config.nli.model_id,
+            tokenizer_identifier=config.nli.tokenizer_id,
+            execution_device=device_enum,
+            inference_precision=config.nli.precision,
+            max_sequence_length=config.nli.max_sequence_length,
+            batch_size=config.nli.batch_size,
+        )
+
+        label_schema = NLILabelSchema(
+            label_ordering=("CONTRADICTED", "SUPPORTED", "INSUFFICIENT"),
+            id_mapping={0: "CONTRADICTED", 1: "SUPPORTED", 2: "INSUFFICIENT"},
+        )
+
+        try:
+            engine_model = TransformerNLIModel(
+                config=model_def, label_schema=label_schema
+            )
+            if isinstance(engine_model, TransformerNLIModel):
+                if hasattr(engine_model.inference_engine.model, "config"):
+                    num_labels = getattr(
+                        engine_model.inference_engine.model.config, "num_labels", None
+                    )
+                    if num_labels is not None and num_labels != 3:
+                        raise VerificationConfigurationError(
+                            f"NLI model output dimension must be 3, got {num_labels}"
+                        )
+        except Exception as e:
+            raise VerificationConfigurationError(
+                f"Failed to load NLI model: {e}"
+            ) from e
+
+    engine = NLIVerifier(model=engine_model, strategy_id="default_nli")
 
     # 2. Register metadata providers
     metadata_provider = DefaultMetadataProvider(model_id="nli-default")

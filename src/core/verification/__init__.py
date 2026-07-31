@@ -4,13 +4,15 @@ from src.core.verification.aggregation import (
     BaseAggregationStrategy,
     MaxConfidenceAggregationStrategy,
 )
-from src.core.verification.base import BaseMetadataProvider, BaseVerifier
+from src.core.verification.base import BaseMetadataProvider, BaseNLIModel, BaseVerifier
 from src.core.verification.implementations import DefaultMetadataProvider, NLIVerifier
 from src.core.verification.verification_models import (
     AggregationMetadata,
     ClaimVerificationContext,
     ClaimVerificationInput,
     ExecutionDevice,
+    NLILabelSchema,
+    NLIModelDefinition,
     NLIVerificationDefinition,
     PassageVerificationInput,
     PassageVerificationMetadata,
@@ -34,12 +36,15 @@ from src.core.verification.verification_models import (
 __all__ = [
     "BaseAggregationStrategy",
     "BaseVerifier",
+    "BaseNLIModel",
     "BaseMetadataProvider",
     "DefaultMetadataProvider",
     "MaxConfidenceAggregationStrategy",
     "NLIVerificationDefinition",
     "NLIVerifier",
     "ExecutionDevice",
+    "NLILabelSchema",
+    "NLIModelDefinition",
     "ProbabilitySchema",
     "PassageVerificationScore",
     "PassageVerificationMetadata",

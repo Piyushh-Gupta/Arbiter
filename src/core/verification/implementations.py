@@ -1,8 +1,6 @@
 """Concrete implementations for the Verification subsystem."""
 
-from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Any, Protocol, runtime_checkable
 
 from src.core.exceptions import (
     VerificationConfigurationError,
@@ -13,16 +11,19 @@ from src.core.verification.aggregation import (
     BaseAggregationStrategy,
     MaxConfidenceAggregationStrategy,
 )
+from src.core.verification.base import BaseNLIModel, BaseVerifier
 from src.core.verification.verification_models import (
     LABEL_TO_VERDICT,
     VERDICT_TO_LABEL,
     ClaimVerificationInput,
     ExecutionDevice,
+    NLIModelDefinition,
     NLIVerificationDefinition,
+    PassageVerificationInput,
     PassageVerificationMetadata,
     PassageVerificationResult,
-    PassageVerificationScore,
     VerificationDefinition,
+    VerificationExecutionMetadata,
     VerificationLabel,
     VerificationMetadata,
     VerificationResult,
@@ -30,26 +31,6 @@ from src.core.verification.verification_models import (
     VerifiedPassage,
     VerifierRuntimeMetadata,
 )
-
-
-@runtime_checkable
-class NLIModel(Protocol):
-    """Stateless protocol for NLI model backend."""
-
-    @property
-    def label_map(self) -> Mapping[int, Any]:
-        """Translates the model's internal output indices to canonical VerificationVerdict or VerificationLabel values."""
-        ...
-
-    def predict(
-        self, claim: str, passages: Sequence[str]
-    ) -> list[tuple[float, float, float]]:
-        """
-        Scores a claim against a batch of passages.
-
-        Returns list[tuple[float, float, float]]: (p_supports, p_refutes, p_nei).
-        """
-        ...
 
 
 class DefaultMetadataProvider:
@@ -70,12 +51,12 @@ class DefaultMetadataProvider:
         )
 
 
-class NLIVerifier:
+class NLIVerifier(BaseVerifier):
     """
     NLI-based verification strategy implementing passage verification and aggregation.
     """
 
-    def __init__(self, model: NLIModel, strategy_id: str) -> None:
+    def __init__(self, model: BaseNLIModel, strategy_id: str) -> None:
         self.model = model
         self._strategy_id = strategy_id
 
@@ -85,18 +66,19 @@ class NLIVerifier:
                 f"NLIVerifier requires NLIVerificationDefinition, got {type(definition).__name__}"
             )
 
-        label_values = [
-            LABEL_TO_VERDICT.get(v, v) for v in self.model.label_map.values()
-        ]
-        valid_set = {
-            VerificationVerdict.SUPPORTED,
-            VerificationVerdict.CONTRADICTED,
-            VerificationVerdict.INSUFFICIENT,
-        }
-        if len(label_values) != 3 or set(label_values) != valid_set:
-            raise VerificationConfigurationError(
-                "NLIModel.label_map must contain all three VerificationLabel values exactly once."
-            )
+        if hasattr(self.model, "label_map"):
+            label_values = [
+                LABEL_TO_VERDICT.get(v, v) for v in self.model.label_map.values()
+            ]
+            valid_set = {
+                VerificationVerdict.SUPPORTED,
+                VerificationVerdict.CONTRADICTED,
+                VerificationVerdict.INSUFFICIENT,
+            }
+            if len(label_values) != 3 or set(label_values) != valid_set:
+                raise VerificationConfigurationError(
+                    "NLIModel.label_map must contain all three VerificationLabel values exactly once."
+                )
 
     def verify_passages(
         self,
@@ -107,55 +89,49 @@ class NLIVerifier:
         if not passages_to_score:
             return ()
 
-        passage_texts = [p.text for p in passages_to_score]
+        # Construct default execution metadata for inputs wrapping
+        exec_meta = VerificationExecutionMetadata(
+            request_id="default-req",
+            execution_duration=0.0,
+            verifier_profile=self._strategy_id,
+            aggregation_profile="max_confidence",
+            configuration_fingerprint="default_nli_fingerprint",
+        )
+
+        inputs = tuple(
+            PassageVerificationInput(
+                claim=claim,
+                passage=p,
+                execution_metadata=exec_meta,
+            )
+            for p in passages_to_score
+        )
+
         try:
-            raw_predictions = self.model.predict(claim, passage_texts)
+            scores = self.model.predict(inputs)
         except Exception as e:
             raise VerificationExecutionError(f"NLI model execution failed: {e}") from e
 
-        if len(raw_predictions) != len(passages_to_score):
+        if len(scores) != len(passages_to_score):
             raise VerificationExecutionError(
-                f"NLI model returned {len(raw_predictions)} predictions for {len(passages_to_score)} passages."
+                f"NLI model returned {len(scores)} predictions for {len(passages_to_score)} passages."
             )
-
-        label_to_idx = {
-            LABEL_TO_VERDICT.get(v, v): k for k, v in self.model.label_map.items()
-        }
-        idx_supports = label_to_idx[VerificationVerdict.SUPPORTED]
-        idx_refutes = label_to_idx[VerificationVerdict.CONTRADICTED]
-        idx_nei = label_to_idx[VerificationVerdict.INSUFFICIENT]
 
         passage_results: list[PassageVerificationResult] = []
-        for passage, triplet in zip(passages_to_score, raw_predictions):
-            p_supports_raw = float(max(0.0, min(1.0, triplet[idx_supports])))
-            p_refutes_raw = float(max(0.0, min(1.0, triplet[idx_refutes])))
-            p_nei_raw = float(max(0.0, min(1.0, triplet[idx_nei])))
+        for passage, score in zip(passages_to_score, scores):
+            p_supports = score.entailment_probability
+            p_refutes = score.contradiction_probability
+            p_nei = score.neutral_probability
 
-            # Determine verdict and raw confidence
-            if p_supports_raw >= p_refutes_raw and p_supports_raw >= p_nei_raw:
+            if p_supports >= p_refutes and p_supports >= p_nei:
                 verdict = VerificationVerdict.SUPPORTED
-                conf = p_supports_raw
-            elif p_refutes_raw > p_supports_raw and p_refutes_raw >= p_nei_raw:
+                conf = p_supports
+            elif p_refutes > p_supports and p_refutes >= p_nei:
                 verdict = VerificationVerdict.CONTRADICTED
-                conf = p_refutes_raw
+                conf = p_refutes
             else:
                 verdict = VerificationVerdict.INSUFFICIENT
-                conf = p_nei_raw
-
-            # Calculate normalized probabilities for the score distribution
-            total = p_supports_raw + p_refutes_raw + p_nei_raw
-            if total > 0.0:
-                p_supports = p_supports_raw / total
-                p_refutes = p_refutes_raw / total
-                p_nei = p_nei_raw / total
-            else:
-                p_supports, p_refutes, p_nei = 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
-
-            score = PassageVerificationScore(
-                entailment_probability=p_supports,
-                contradiction_probability=p_refutes,
-                neutral_probability=p_nei,
-            )
+                conf = p_nei
 
             passage_results.append(
                 PassageVerificationResult(
@@ -205,7 +181,6 @@ class NLIVerifier:
 
         passage_results = self.verify_passages(claim, sub_bundle)
 
-        # Validate each score against the active schema in the definition
         for pr in passage_results:
             pr.probability_distribution.validate_against_schema(
                 definition.probability_schema
@@ -216,8 +191,24 @@ class NLIVerifier:
         else:
             strategy = MaxConfidenceAggregationStrategy()
 
-        metadata_provider = DefaultMetadataProvider(model_id=definition.verifier_model)
-        runtime_metadata = metadata_provider.get_runtime_metadata()
+        # Check if model has a configuration to populate VerifierRuntimeMetadata dynamically
+        if hasattr(self.model, "config") and isinstance(
+            self.model.config, NLIModelDefinition
+        ):
+            runtime_metadata = VerifierRuntimeMetadata(
+                model_id=self.model.config.model_id,
+                revision="1.0",
+                tokenizer=self.model.config.tokenizer_id,
+                framework="pytorch",
+                execution_device=self.model.config.execution_device,
+                inference_precision=self.model.config.inference_precision,
+                execution_timestamp=datetime.now(timezone.utc),
+            )
+        else:
+            metadata_provider = DefaultMetadataProvider(
+                model_id=definition.verifier_model
+            )
+            runtime_metadata = metadata_provider.get_runtime_metadata()
 
         claim_input = ClaimVerificationInput(
             claim=claim,

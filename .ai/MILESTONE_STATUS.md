@@ -108,3 +108,4 @@
 ## M2 Verification Modernization
 - [x] M2.1 Verification Architecture Modernization
 - [x] M2.2 Verifier Interfaces & Immutable Models
+- [x] M2.3 Natural Language Inference (NLI) Verification Engine

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     download: DownloadSettings = DownloadSettings()
     db: DatabaseSettings = DatabaseSettings()
     log: LoggingSettings = LoggingSettings()
+    nli: "NLIVerifierSettings" = Field(default_factory=lambda: NLIVerifierSettings())
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -58,6 +59,17 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
     )
+
+
+class NLIVerifierSettings(BaseModel):
+    """NLI verifier configuration settings."""
+
+    model_id: str = Field(default="cross-encoder/nli-distilroberta-base")
+    tokenizer_id: str = Field(default="cross-encoder/nli-distilroberta-base")
+    device: str = Field(default="cpu")
+    precision: str = Field(default="fp32")
+    max_sequence_length: int = Field(default=512)
+    batch_size: int = Field(default=8)
 
 
 settings = Settings()

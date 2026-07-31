@@ -4,11 +4,29 @@ from typing import Protocol, runtime_checkable
 
 from src.core.retrieval.retrieval_models import EvidenceBundle
 from src.core.verification.verification_models import (
+    PassageVerificationInput,
     PassageVerificationResult,
+    PassageVerificationScore,
     VerificationDefinition,
     VerificationResult,
     VerifierRuntimeMetadata,
 )
+
+
+@runtime_checkable
+class BaseNLIModel(Protocol):
+    """Stateless protocol for Natural Language Inference (NLI) model backend."""
+
+    def predict(
+        self, batch: tuple[PassageVerificationInput, ...]
+    ) -> tuple[PassageVerificationScore, ...]:
+        """
+        Scores a batch of claim-passage pairs.
+
+        Returns:
+            tuple[PassageVerificationScore, ...]: Bounded probability scores.
+        """
+        ...
 
 
 @runtime_checkable

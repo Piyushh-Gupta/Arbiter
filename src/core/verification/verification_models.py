@@ -80,6 +80,80 @@ class ProbabilitySchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class NLILabelSchema(BaseModel):
+    """Immutable NLI label schema containing mappings and label ordering specifications."""
+
+    label_ordering: tuple[str, ...] = Field(
+        default=("CONTRADICTED", "SUPPORTED", "INSUFFICIENT"),
+        description="Ordering of labels returned by the NLI model logits.",
+    )
+    id_mapping: dict[int, str] = Field(
+        default_factory=lambda: {0: "CONTRADICTED", 1: "SUPPORTED", 2: "INSUFFICIENT"},
+        description="Raw output index to label string mapping.",
+    )
+    verdict_mapping: dict[str, VerificationVerdict] = Field(
+        default_factory=lambda: {
+            "SUPPORTED": VerificationVerdict.SUPPORTED,
+            "CONTRADICTED": VerificationVerdict.CONTRADICTED,
+            "INSUFFICIENT": VerificationVerdict.INSUFFICIENT,
+            "CONTRADICTION": VerificationVerdict.CONTRADICTED,
+            "ENTAILMENT": VerificationVerdict.SUPPORTED,
+            "NEUTRAL": VerificationVerdict.INSUFFICIENT,
+            "SUPPORTS": VerificationVerdict.SUPPORTED,
+            "REFUTES": VerificationVerdict.CONTRADICTED,
+            "NOT_ENOUGH_INFO": VerificationVerdict.INSUFFICIENT,
+        },
+        description="Mapping from label strings to canonical VerificationVerdict enums.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def validate_schema(self) -> "NLILabelSchema":
+        expected = {
+            VerificationVerdict.SUPPORTED,
+            VerificationVerdict.CONTRADICTED,
+            VerificationVerdict.INSUFFICIENT,
+        }
+        mapped_verdicts = set(self.verdict_mapping.values())
+        if not expected.issubset(mapped_verdicts):
+            raise ValueError(
+                "verdict_mapping must map to all canonical VerificationVerdict values."
+            )
+        return self
+
+
+class NLIModelDefinition(BaseModel):
+    """Immutable configuration profile definition for a Natural Language Inference (NLI) model."""
+
+    model_id: str = Field(
+        ..., alias="model_identifier", description="HuggingFace model ID."
+    )
+    tokenizer_id: str = Field(
+        ..., alias="tokenizer_identifier", description="HuggingFace tokenizer ID."
+    )
+    execution_device: ExecutionDevice = Field(
+        default=ExecutionDevice.CPU, description="Hardware target."
+    )
+    inference_precision: str = Field(
+        default="fp32", description="Execution precision, e.g. fp16 or fp32."
+    )
+    max_sequence_length: int = Field(
+        default=512, description="Maximum sequence length."
+    )
+    batch_size: int = Field(default=8, description="Inference batch size.")
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    @property
+    def model_identifier(self) -> str:
+        return self.model_id
+
+    @property
+    def tokenizer_identifier(self) -> str:
+        return self.tokenizer_id
+
+
 class PassageVerificationScore(BaseModel):
     """Immutable verification score container."""
 
