@@ -6,7 +6,13 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from src.api.routes import evaluation, health
-from src.core.bootstrap import build_pipeline, initialize_application
+from src.core.bootstrap import (
+    build_calibration_registry,
+    build_pipeline,
+    build_verification_operational_registry,
+    build_verification_optimization_registry,
+    initialize_application,
+)
 from src.core.config import Settings
 from src.core.exceptions import ArbiterError
 
@@ -21,10 +27,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         initialize_application(config)
         pipeline = build_pipeline(config)
         app.state.pipeline = pipeline
-        logger.info("Arbiter Pipeline mounted successfully.")
+        app.state.verification_optimization_registry = (
+            build_verification_optimization_registry(config)
+        )
+        app.state.verification_operational_registry = (
+            build_verification_operational_registry(config)
+        )
+        app.state.calibration_registry = build_calibration_registry(config)
+        logger.info(
+            "Arbiter Pipeline and optimization/operational/calibration registries mounted successfully."
+        )
     except Exception as e:
         # We explicitly log startup failures using the infrastructure logger
-        # Note: if _configure_logging hasn't run, this uses default logging, which is fine
         logging.getLogger("arbiter.bootstrap").critical(f"Startup failed: {e}")
         raise
 
@@ -33,7 +47,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Graceful Shutdown
     logger.info("Initiating graceful shutdown...")
     app.state.pipeline = None
-    logger.info("Arbiter Pipeline reference released.")
+    app.state.verification_optimization_registry = None
+    app.state.verification_operational_registry = None
+    app.state.calibration_registry = None
+    logger.info(
+        "Arbiter Pipeline reference and operational/calibration references released."
+    )
 
 
 def create_app() -> FastAPI:

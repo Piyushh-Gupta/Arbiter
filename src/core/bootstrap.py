@@ -999,3 +999,44 @@ def build_verification_optimization_registry(
         ) from e
 
     return registry
+
+
+def build_verification_operational_registry(
+    config: AppConfig,
+) -> Any:
+    """Builds and validates the verification operational registry."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.verification.operational.operational_models import (
+        VerificationOperationalProfile,
+        VerificationOperationalRegistry,
+    )
+
+    # 1. Read configuration settings
+    env = getattr(config, "environment", "development")
+    log_cfg = getattr(config, "logging_configuration", {}) or {}
+    readiness_cfg = getattr(config, "readiness_configuration", {}) or {}
+    telemetry_cfg = getattr(config, "telemetry_configuration", {}) or {}
+
+    # 2. Perform validation checks
+    if env not in ("production", "staging", "development"):
+        raise OptimizationConfigurationError(
+            f"Invalid environment '{env}'. Must be production, staging, or development."
+        )
+
+    # Validate registry dependencies and integrity
+    profile = VerificationOperationalProfile(
+        profile_id="default_operational",
+        environment=env,
+        logging_configuration=log_cfg,
+        readiness_configuration=readiness_cfg,
+        telemetry_configuration=telemetry_cfg,
+    )
+
+    try:
+        registry = VerificationOperationalRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Verification operational registry validation failed: {e}"
+        ) from e
+
+    return registry

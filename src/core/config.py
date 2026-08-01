@@ -1,6 +1,6 @@
 """Centralized configuration system using Pydantic Settings."""
 
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     verification_optimization: "VerificationOptimizationSettings" = Field(
         default_factory=lambda: VerificationOptimizationSettings()
     )
+    verification_hardening: "VerificationHardeningSettings" = Field(
+        default_factory=lambda: VerificationHardeningSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -120,6 +123,15 @@ class VerificationOptimizationSettings(BaseModel):
     """Configuration settings for verification production optimization."""
 
     default_profile: str = Field(default="default_optimization")
+
+
+class VerificationHardeningSettings(BaseModel):
+    """Configuration settings for verification production hardening."""
+
+    operational_profile: str = Field(default="default_operational")
+    logging_configuration: dict[str, Any] = Field(default_factory=dict)
+    readiness_configuration: dict[str, Any] = Field(default_factory=dict)
+    telemetry_configuration: dict[str, Any] = Field(default_factory=dict)
 
 
 settings = Settings()
