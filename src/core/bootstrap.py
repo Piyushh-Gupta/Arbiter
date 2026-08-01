@@ -24,12 +24,6 @@ from src.core.explainability.explainability_models import (
     RuleBasedExplanationDefinition,
 )
 from src.core.explainability.implementations import RuleBasedExplainer
-from src.core.failure_analysis.failure_analysis_models import (
-    FailureAnalysisProfile,
-    FailureAnalysisProfileRegistry,
-    VerificationFailureAnalysisDefinition,
-)
-from src.core.failure_analysis.implementations import VerificationFailureAnalyzer
 from src.core.paths import ProjectPaths
 from src.core.pipeline.orchestrator import ArbiterPipeline
 from src.core.reranking.reranking_models import RerankingProfileRegistry
@@ -488,16 +482,33 @@ def build_verification_registry(config: AppConfig) -> VerificationProfileRegistr
 
 def build_failure_analysis_registry(
     config: AppConfig,
-) -> FailureAnalysisProfileRegistry:
+) -> Any:
     """Builds the failure analysis registry."""
-    engine = VerificationFailureAnalyzer()
-    definition = VerificationFailureAnalysisDefinition(min_confidence_threshold=0.5)
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.failure.failure_models import (
+        FailureAnalysisDefinition,
+        FailureAnalysisProfile,
+        FailureAnalysisProfileRegistry,
+    )
+    from src.core.failure.implementations import DefaultFailureAnalyzer
+
+    engine = DefaultFailureAnalyzer()
+    definition = FailureAnalysisDefinition()
+
     profile = FailureAnalysisProfile(
         profile_id="default_failure_analysis",
         definition=definition,
         analyzer=engine,
     )
-    return FailureAnalysisProfileRegistry(profiles=(profile,))
+
+    try:
+        registry = FailureAnalysisProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Failure analysis registry initialization failed: {e}"
+        ) from e
+
+    return registry
 
 
 def build_calibration_registry(config: AppConfig) -> Any:
