@@ -657,16 +657,105 @@ def build_decision_registry(config: AppConfig) -> DecisionProfileRegistry:
     return DecisionProfileRegistry(profiles=(profile,))
 
 
-def build_explanation_registry(config: AppConfig) -> ExplanationProfileRegistry:
-    """Builds the explanation registry."""
-    engine = RuleBasedExplainer()
-    definition = RuleBasedExplanationDefinition()
-    profile = ExplanationProfile(
-        profile_id="default_explanation",
-        definition=definition,
-        engine=engine,
+def build_explanation_registry(
+    config: AppConfig,
+    verification_registry: Any = None,
+    calibration_registry: Any = None,
+) -> ExplanationProfileRegistry:
+    """Builds and validates the explanation registry."""
+    from src.core.exceptions import ExplanationConfigurationError
+    from src.core.explainability.explanation_models import (
+        VerificationExplanationDefinition,
     )
-    return ExplanationProfileRegistry(profiles=(profile,))
+    from src.core.explainability.implementations import (
+        CompositeExplanationStrategy,
+        ConfidenceExplanationStrategy,
+        DecisionTraceStrategy,
+        EvidenceAttributionStrategy,
+    )
+
+    engine_m13 = RuleBasedExplainer()
+    definition_m13 = RuleBasedExplanationDefinition()
+    profile_m13 = ExplanationProfile(
+        profile_id="default_explanation",
+        definition=definition_m13,
+        engine=engine_m13,
+    )
+
+    strat_comp = CompositeExplanationStrategy()
+    def_comp = VerificationExplanationDefinition(explanation_strategy="COMPOSITE")
+    prof_comp = ExplanationProfile(
+        profile_id="composite_explanation",
+        definition=def_comp,
+        engine=strat_comp,
+        verification_profile_id="default_verification",
+        calibration_profile_id="identity",
+    )
+
+    strat_attr = EvidenceAttributionStrategy()
+    def_attr = VerificationExplanationDefinition(
+        explanation_strategy="EVIDENCE_ATTRIBUTION"
+    )
+    prof_attr = ExplanationProfile(
+        profile_id="evidence_attribution",
+        definition=def_attr,
+        engine=strat_attr,
+        verification_profile_id="default_verification",
+        calibration_profile_id="identity",
+    )
+
+    strat_trace = DecisionTraceStrategy()
+    def_trace = VerificationExplanationDefinition(explanation_strategy="DECISION_TRACE")
+    prof_trace = ExplanationProfile(
+        profile_id="decision_trace",
+        definition=def_trace,
+        engine=strat_trace,
+        verification_profile_id="default_verification",
+        calibration_profile_id="identity",
+    )
+
+    strat_conf = ConfidenceExplanationStrategy()
+    def_conf = VerificationExplanationDefinition(
+        explanation_strategy="CONFIDENCE_EXPLANATION"
+    )
+    prof_conf = ExplanationProfile(
+        profile_id="confidence_explanation",
+        definition=def_conf,
+        engine=strat_conf,
+        verification_profile_id="default_verification",
+        calibration_profile_id="identity",
+    )
+
+    profiles = (profile_m13, prof_comp, prof_attr, prof_trace, prof_conf)
+
+    if verification_registry is not None:
+        for p in profiles:
+            if p.verification_profile_id is not None:
+                try:
+                    verification_registry.resolve(p.verification_profile_id)
+                except KeyError as e:
+                    raise ExplanationConfigurationError(
+                        f"Incompatible verification profile '{p.verification_profile_id}' for explanation profile '{p.profile_id}'"
+                    ) from e
+
+    if calibration_registry is not None:
+        for p in profiles:
+            if p.calibration_profile_id is not None:
+                try:
+                    calibration_registry.resolve(p.calibration_profile_id)
+                except KeyError as e:
+                    raise ExplanationConfigurationError(
+                        f"Incompatible calibration profile '{p.calibration_profile_id}' for explanation profile '{p.profile_id}'"
+                    ) from e
+
+    try:
+        registry = ExplanationProfileRegistry(profiles=profiles)
+    except Exception as e:
+        raise ExplanationConfigurationError(
+            f"Explanation registry validation failed: {e}"
+        ) from e
+
+    return registry
 
 
 class DummyCrossEncoderScorer:
@@ -852,12 +941,14 @@ def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:
 
 def build_pipeline(config: AppConfig) -> ArbiterPipeline:
     """Builds the full Arbiter Pipeline."""
+    ver_reg = build_verification_registry(config)
+    cal_reg = build_calibration_registry(config)
     return ArbiterPipeline(
         retrieval_registry=build_retrieval_registry(config),
-        verification_registry=build_verification_registry(config),
+        verification_registry=ver_reg,
         failure_analysis_registry=build_failure_analysis_registry(config),
         uncertainty_registry=build_uncertainty_registry(config),
         decision_registry=build_decision_registry(config),
-        explanation_registry=build_explanation_registry(config),
+        explanation_registry=build_explanation_registry(config, ver_reg, cal_reg),
         evaluation_registry=build_evaluation_registry(config),
     )

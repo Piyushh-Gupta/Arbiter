@@ -57,6 +57,9 @@ class Settings(BaseSettings):
         default_factory=lambda: CalibrationSettings()
     )
     benchmark: "BenchmarkSettings" = Field(default_factory=lambda: BenchmarkSettings())
+    explainability: "ExplainabilitySettings" = Field(
+        default_factory=lambda: ExplainabilitySettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -102,6 +105,12 @@ class BenchmarkSettings(BaseModel):
 
     default_profile: str = Field(default="default_benchmark")
     dataset_base_path: str = Field(default="data/benchmark")
+
+
+class ExplainabilitySettings(BaseModel):
+    """Configuration settings for explainability."""
+
+    default_profile: str = Field(default="composite_explanation")
 
 
 settings = Settings()

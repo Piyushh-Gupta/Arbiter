@@ -55,7 +55,7 @@ def test_build_decision_registry(config: Settings) -> None:
 
 def test_build_explanation_registry(config: Settings) -> None:
     registry = build_explanation_registry(config)
-    assert len(registry.profiles) == 1
+    assert len(registry.profiles) == 5
     assert registry.profiles[0].profile_id == "default_explanation"
 
 

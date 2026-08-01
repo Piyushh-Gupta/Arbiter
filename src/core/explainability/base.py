@@ -1,6 +1,6 @@
 """Core protocol defining explanation engines."""
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from src.core.decision.decision_models import DecisionResult
 from src.core.explainability.explainability_models import (
@@ -45,5 +45,33 @@ class BaseExplainer(Protocol):
 
         Raises:
             ExplanationExecutionError: If execution fails unexpectedly.
+        """
+        ...
+
+
+class BaseExplanationStrategy(Protocol):
+    """
+    Protocol for all verification explanation strategies.
+    """
+
+    def validate_compatibility(self, definition: ExplanationDefinition) -> None:
+        """
+        Validates whether the provided configuration is compatible with this strategy.
+
+        Args:
+            definition: The configuration parameters to validate.
+        """
+        ...
+
+    def explain(
+        self,
+        verification_result: Any,
+        calibration_result: Any,
+        evidence_bundle: Any,
+        aggregation_trace: Any,
+        definition: ExplanationDefinition,
+    ) -> ExplanationResult:
+        """
+        Executes the explanation strategy logic to produce an ExplanationResult.
         """
         ...

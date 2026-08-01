@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from src.core.decision.decision_models import DecisionResult
 from src.core.exceptions import (
     DuplicateExplanationProfileError,
     ExplanationProfileNotFoundError,
@@ -60,16 +59,40 @@ class ExplanationResult(BaseModel):
         min_length=1,
         description="The generated explanation segments. Must contain at least one section.",
     )
-    decision_result: DecisionResult = Field(
-        ...,
+    decision_result: Any = Field(
+        default=None,
         description="The unbroken chain of prior pipeline state.",
     )
     metadata: ExplanationMetadata = Field(
         ...,
         description="Minimal execution provenance for downstream observability.",
     )
+    verification_result: Any | None = Field(
+        default=None,
+        description="Optional verification result associated with this explanation.",
+    )
+    calibration_result: Any | None = Field(
+        default=None,
+        description="Optional calibration result associated with this explanation.",
+    )
+    evidence_attribution: Any | None = Field(
+        default=None,
+        description="Optional evidence attribution associated with this explanation.",
+    )
+    decision_trace: Any | None = Field(
+        default=None,
+        description="Optional decision trace associated with this explanation.",
+    )
+    contribution_analysis: Any | None = Field(
+        default=None,
+        description="Optional contribution analysis associated with this explanation.",
+    )
+    explanation_trace: Any | None = Field(
+        default=None,
+        description="Optional explanation trace associated with this explanation.",
+    )
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
 class RuleBasedExplanationDefinition(ExplanationDefinition):
@@ -91,9 +114,15 @@ class ExplanationProfile(BaseModel):
         ...,
         description="The strictly immutable configuration for this explanation strategy.",
     )
-    engine: BaseExplainer = Field(
+    engine: Any = Field(
         ...,
         description="The stateless executable strategy resolving the definition.",
+    )
+    verification_profile_id: str | None = Field(
+        default=None, description="Optional referenced verification profile ID."
+    )
+    calibration_profile_id: str | None = Field(
+        default=None, description="Optional referenced calibration profile ID."
     )
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -101,7 +130,8 @@ class ExplanationProfile(BaseModel):
     @model_validator(mode="after")
     def _validate_compatibility(self) -> "ExplanationProfile":
         """Front-loads compatibility validation at profile construction."""
-        self.engine.validate_compatibility(self.definition)
+        if hasattr(self.engine, "validate_compatibility"):
+            self.engine.validate_compatibility(self.definition)
         return self
 
 
