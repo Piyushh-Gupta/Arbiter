@@ -1,4 +1,4 @@
-"""Immutable domain models for Verification Failure Analysis Modernization (M3.2)."""
+"""Immutable domain models for Verification Failure Analysis Modernization (M3.3)."""
 
 from enum import Enum
 from typing import Any, Mapping
@@ -104,14 +104,37 @@ class FailureDiagnostic(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class DiagnosticEvidence(BaseModel):
+    """Immutable details of a specific piece of evidence detected during analysis."""
+
+    analyzer_id: str = Field(..., min_length=1)
+    artifact_reference: FailureArtifactReference | Any = Field(...)
+    detected_issue: str = Field(..., min_length=1)
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
+class AnalyzerExecutionResult(BaseModel):
+    """Immutable output from a single specialized analyzer run."""
+
+    analyzer_id: str = Field(..., min_length=1)
+    execution_order: int = Field(..., ge=0)
+    classification: FailureClassification = Field(...)
+    diagnostic_evidence: tuple[DiagnosticEvidence, ...] = Field(default_factory=tuple)
+    runtime_metadata: FailureRuntimeMetadata = Field(...)
+
+    model_config = ConfigDict(frozen=True)
+
+
 class FailureDiagnosticContext(BaseModel):
     """Immutable context separating root-cause analysis from category classification."""
 
-    ordered_analyzer_outputs: tuple[Any, ...] = Field(default_factory=tuple)
-    inspected_artifact_references: tuple[FailureArtifactReference, ...] = Field(
+    ordered_analyzer_outputs: tuple[AnalyzerExecutionResult, ...] = Field(
         default_factory=tuple
     )
-    execution_metadata: dict[str, Any] = Field(default_factory=dict)
+    aggregated_metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=True)
 

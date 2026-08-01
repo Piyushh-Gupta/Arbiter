@@ -490,15 +490,42 @@ def build_failure_analysis_registry(
         FailureAnalysisProfile,
         FailureAnalysisProfileRegistry,
     )
-    from src.core.failure.implementations import DefaultFailureAnalyzer
+    from src.core.failure.implementations import (
+        CalibrationFailureAnalyzer,
+        CompositeFailureAnalyzer,
+        DefaultFailureAggregationStrategy,
+        InfrastructureFailureAnalyzer,
+        RetrievalFailureAnalyzer,
+        VerificationFailureAnalyzer,
+    )
 
-    engine = DefaultFailureAnalyzer()
+    # 1. Instantiate specialized analyzers
+    r_analyzer = RetrievalFailureAnalyzer()
+    v_analyzer = VerificationFailureAnalyzer()
+    c_analyzer = CalibrationFailureAnalyzer()
+    i_analyzer = InfrastructureFailureAnalyzer()
+
+    analyzers = (r_analyzer, v_analyzer, c_analyzer, i_analyzer)
+
+    # 2. Duplicate analyzer ID checks
+    analyzer_ids = [a.runtime_metadata.analyzer_id for a in analyzers]
+    if len(analyzer_ids) != len(set(analyzer_ids)):
+        raise OptimizationConfigurationError(
+            "Duplicate analyzer IDs detected during bootstrap."
+        )
+
+    # 3. Instantiate Composite and Aggregation
+    agg_strategy = DefaultFailureAggregationStrategy()
+    composite = CompositeFailureAnalyzer(
+        analyzers=analyzers, aggregation_strategy=agg_strategy
+    )
+
     definition = FailureAnalysisDefinition()
 
     profile = FailureAnalysisProfile(
         profile_id="default_failure_analysis",
         definition=definition,
-        analyzer=engine,
+        analyzer=composite,
     )
 
     try:

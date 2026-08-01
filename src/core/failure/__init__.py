@@ -1,19 +1,34 @@
 """Verification Failure Analysis subsystem (M3.1)."""
 
-from src.core.failure.base import BaseFailureAnalyzer
+from src.core.failure.base import BaseFailureAnalyzer, FailureAggregationStrategy
 from src.core.failure.failure_models import (
+    AnalyzerExecutionResult,
+    DiagnosticEvidence,
     FailureAnalysisDefinition,
+    FailureAnalysisInput,
     FailureAnalysisProfile,
     FailureAnalysisProfileRegistry,
     FailureAnalysisResult,
+    FailureArtifactReference,
     FailureCategory,
     FailureClassification,
     FailureDiagnostic,
+    FailureDiagnosticContext,
+    FailureExecutionMetadata,
     FailureRootCause,
+    FailureRuntimeMetadata,
     FailureSeverity,
     FailureTrace,
 )
-from src.core.failure.implementations import DefaultFailureAnalyzer
+from src.core.failure.implementations import (
+    CalibrationFailureAnalyzer,
+    CompositeFailureAnalyzer,
+    DefaultFailureAggregationStrategy,
+    DefaultFailureAnalyzer,
+    InfrastructureFailureAnalyzer,
+    RetrievalFailureAnalyzer,
+    VerificationFailureAnalyzer,
+)
 
 __all__ = [
     "FailureSeverity",
@@ -28,4 +43,18 @@ __all__ = [
     "FailureAnalysisProfileRegistry",
     "BaseFailureAnalyzer",
     "DefaultFailureAnalyzer",
+    "FailureAnalysisInput",
+    "FailureArtifactReference",
+    "FailureRuntimeMetadata",
+    "FailureExecutionMetadata",
+    "DiagnosticEvidence",
+    "AnalyzerExecutionResult",
+    "FailureDiagnosticContext",
+    "FailureAggregationStrategy",
+    "RetrievalFailureAnalyzer",
+    "VerificationFailureAnalyzer",
+    "CalibrationFailureAnalyzer",
+    "InfrastructureFailureAnalyzer",
+    "DefaultFailureAggregationStrategy",
+    "CompositeFailureAnalyzer",
 ]
