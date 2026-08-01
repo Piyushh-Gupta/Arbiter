@@ -1,9 +1,10 @@
-"""Base interfaces and protocols for Verification Failure Analysis (M3.1)."""
+"""Base interfaces and protocols for Verification Failure Analysis (M3.2)."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from src.core.failure.failure_models import (
     FailureAnalysisDefinition,
+    FailureAnalysisInput,
     FailureAnalysisResult,
 )
 
@@ -18,9 +19,7 @@ class BaseFailureAnalyzer(Protocol):
 
     def analyze(
         self,
-        claim: str,
-        verification_result: Any,
-        definition: FailureAnalysisDefinition,
+        input_data: FailureAnalysisInput,
     ) -> FailureAnalysisResult:
         """Performs failure detection, classification, and diagnosis on verification artifacts."""
         ...

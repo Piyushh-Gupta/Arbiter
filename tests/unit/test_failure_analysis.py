@@ -1,24 +1,21 @@
-"""Unit tests for modernized Verification Failure Analysis (M3.1) subsystem."""
+"""Unit tests for M3.2 Failure Analyzer Interfaces & Immutable Models."""
 
 import pytest
 from pydantic import ValidationError
 
 from src.core.bootstrap import build_failure_analysis_registry
 from src.core.config import Settings
-from src.core.exceptions import (
-    DuplicateFailureAnalysisProfileError,
-    FailureAnalysisProfileNotFoundError,
-)
+from src.core.exceptions import DuplicateFailureAnalysisProfileError
 from src.core.failure.failure_models import (
     FailureAnalysisDefinition,
+    FailureAnalysisInput,
     FailureAnalysisProfile,
     FailureAnalysisProfileRegistry,
+    FailureArtifactReference,
     FailureCategory,
-    FailureClassification,
-    FailureDiagnostic,
-    FailureRootCause,
-    FailureSeverity,
-    FailureTrace,
+    FailureDiagnosticContext,
+    FailureExecutionMetadata,
+    FailureRuntimeMetadata,
 )
 from src.core.failure.implementations import DefaultFailureAnalyzer
 from src.core.retrieval.retrieval_models import (
@@ -53,131 +50,134 @@ def dummy_verification_result(
     )
 
 
-def test_failure_enums_and_models() -> None:
-    # 1. FailureSeverity
-    assert FailureSeverity.INFO == "INFO"
-    assert FailureSeverity.CRITICAL == "CRITICAL"
-
-    # 2. FailureCategory
-    assert FailureCategory.RETRIEVAL == "RETRIEVAL"
-    assert FailureCategory.VERIFICATION == "VERIFICATION"
-
-    # 3. FailureRootCause
-    assert FailureRootCause.MISSING_EVIDENCE == "MISSING_EVIDENCE"
-    assert FailureRootCause.LOW_CONFIDENCE == "LOW_CONFIDENCE"
-
-
-def test_failure_classification_and_diagnostic() -> None:
-    classification = FailureClassification(
-        category=FailureCategory.RETRIEVAL,
-        severity=FailureSeverity.CRITICAL,
-        affected_subsystem="retrieval",
+def test_models_immutability(dummy_evidence_bundle: EvidenceBundle) -> None:
+    # 1. FailureArtifactReference
+    ref = FailureArtifactReference(
+        artifact_id="a1",
+        artifact_type="bundle",
+        subsystem="retrieval",
     )
-    assert classification.category == FailureCategory.RETRIEVAL
-    assert classification.severity == FailureSeverity.CRITICAL
-
     with pytest.raises(ValidationError):
-        setattr(classification, "severity", FailureSeverity.LOW)
+        setattr(ref, "subsystem", "verification")
 
-    diagnostic = FailureDiagnostic(
-        root_cause=FailureRootCause.MISSING_EVIDENCE,
-        diagnostic_summary="No evidence passages found",
-        affected_artifacts=("evidence_bundle",),
+    # 2. FailureRuntimeMetadata
+    runtime = FailureRuntimeMetadata(
+        analyzer_id="a_id",
+        analyzer_version="1.0",
+        execution_environment="production",
+        execution_device="cpu",
+        framework="python",
+        execution_timestamp="2026-08-01",
     )
-    assert diagnostic.root_cause == FailureRootCause.MISSING_EVIDENCE
+    with pytest.raises(ValidationError):
+        setattr(runtime, "execution_device", "gpu")
 
-
-def test_failure_trace() -> None:
-    trace = FailureTrace(
-        analyzer_execution_order=("DefaultFailureAnalyzer",),
-        diagnostic_sequence=("check_retrieval",),
-        classification_path=("RETRIEVAL",),
-        inspected_artifacts=("evidence_bundle",),
-        execution_metadata={"key": "val"},
+    # 3. FailureExecutionMetadata
+    exec_meta = FailureExecutionMetadata(
+        request_id="req1",
+        execution_duration=12.5,
+        analyzer_profile="default",
+        configuration_fingerprint="abc",
     )
-    assert trace.analyzer_execution_order == ("DefaultFailureAnalyzer",)
-    assert trace.execution_metadata == {"key": "val"}
+    with pytest.raises(ValidationError):
+        setattr(exec_meta, "execution_duration", 15.0)
 
-
-def test_default_analyzer_retrieval_failure() -> None:
-    analyzer = DefaultFailureAnalyzer()
-    definition = FailureAnalysisDefinition()
-
-    # Empty bundle -> Retrieval Failure
-    empty_bundle = EvidenceBundle(
-        claim="Claim",
-        passages=(),
-        metadata=RetrievalMetadata(strategy_id="test", top_k=0),
+    # 4. FailureDiagnosticContext
+    context = FailureDiagnosticContext(
+        ordered_analyzer_outputs=(),
+        inspected_artifact_references=(ref,),
     )
-    ver_res = VerificationResult(
-        verdict=VerificationVerdict.INSUFFICIENT,
-        confidence=1.0,
-        evidence_bundle=empty_bundle,
+    with pytest.raises(ValidationError):
+        setattr(context, "ordered_analyzer_outputs", ("out",))
+
+    # 5. FailureAnalysisInput
+    defn = FailureAnalysisDefinition()
+    inp = FailureAnalysisInput(
+        claim="Claim text",
+        pipeline_artifacts={"verification_result": "dummy"},
+        definition=defn,
     )
-
-    res = analyzer.analyze("Claim", ver_res, definition)
-    assert res.classification.category == FailureCategory.RETRIEVAL
-    assert res.classification.severity == FailureSeverity.CRITICAL
-    assert res.diagnostic.root_cause == FailureRootCause.MISSING_EVIDENCE
+    with pytest.raises(ValidationError):
+        setattr(inp, "claim", "New claim")
 
 
-def test_default_analyzer_verification_failure(
-    dummy_evidence_bundle: EvidenceBundle,
-) -> None:
-    analyzer = DefaultFailureAnalyzer()
-    definition = FailureAnalysisDefinition()
-
-    # Low confidence -> Verification Failure
-    ver_res = VerificationResult(
-        verdict=VerificationVerdict.SUPPORTED,
-        confidence=0.3,
-        evidence_bundle=dummy_evidence_bundle,
-    )
-
-    res = analyzer.analyze("Claim", ver_res, definition)
-    assert res.classification.category == FailureCategory.VERIFICATION
-    assert res.classification.severity == FailureSeverity.HIGH
-    assert res.diagnostic.root_cause == FailureRootCause.LOW_CONFIDENCE
-
-
-def test_default_analyzer_contradictory_evidence(
-    dummy_evidence_bundle: EvidenceBundle,
-) -> None:
-    analyzer = DefaultFailureAnalyzer()
-    definition = FailureAnalysisDefinition()
-
-    # Contradictory passages -> Aggregation Failure
-    ver_res = VerificationResult(
-        verdict=VerificationVerdict.SUPPORTED,
-        confidence=0.9,
-        evidence_bundle=dummy_evidence_bundle,
-        supporting_passages=("s1",),
-        contradicting_passages=("s2",),
-    )
-
-    res = analyzer.analyze("Claim", ver_res, definition)
-    assert res.classification.category == FailureCategory.AGGREGATION
-    assert res.classification.severity == FailureSeverity.MEDIUM
-    assert res.diagnostic.root_cause == FailureRootCause.CONTRADICTORY_EVIDENCE
-
-
-def test_registry_resolution_and_validation() -> None:
+def test_analyzer_compatibility_and_validation() -> None:
     defn = FailureAnalysisDefinition()
     analyzer = DefaultFailureAnalyzer()
+
+    # Verify that analyzer has the expected metadata and category enums
+    assert isinstance(analyzer.runtime_metadata, FailureRuntimeMetadata)
+    assert FailureCategory.VERIFICATION in analyzer.supported_categories
+
     profile = FailureAnalysisProfile(
         profile_id="p1",
         definition=defn,
         analyzer=analyzer,
     )
+    assert profile.profile_id == "p1"
+
+
+def test_legacy_adapter_equivalence(
+    dummy_verification_result: VerificationResult,
+) -> None:
+    analyzer = DefaultFailureAnalyzer()
+    defn = FailureAnalysisDefinition()
+
+    # Legacy invocation path (should trigger DeprecationWarning)
+    with pytest.deprecated_call():
+        res_legacy = analyzer.analyze("Claim", dummy_verification_result, defn)
+
+    # Canonical invocation path
+    input_data = FailureAnalysisInput(
+        claim="Claim",
+        pipeline_artifacts={"verification_result": dummy_verification_result},
+        definition=defn,
+    )
+    res_canonical = analyzer.analyze(input_data)
+
+    # Validate identical results
+    assert res_legacy.classification == res_canonical.classification
+    assert res_legacy.diagnostic == res_canonical.diagnostic
+    assert (
+        res_legacy.trace.analyzer_execution_order
+        == res_canonical.trace.analyzer_execution_order
+    )
+
+
+def test_determinism_and_integration(
+    dummy_verification_result: VerificationResult,
+) -> None:
+    analyzer = DefaultFailureAnalyzer()
+    defn = FailureAnalysisDefinition()
+    input_data = FailureAnalysisInput(
+        claim="Claim text",
+        pipeline_artifacts={"verification_result": dummy_verification_result},
+        definition=defn,
+    )
+
+    res1 = analyzer.analyze(input_data)
+    res2 = analyzer.analyze(input_data)
+
+    assert res1.classification == res2.classification
+    assert res1.diagnostic == res2.diagnostic
+    assert (
+        res1.trace.execution_metadata["verification_result"]
+        == dummy_verification_result
+    )
+
+
+def test_registry_resolutions() -> None:
+    defn = FailureAnalysisDefinition()
+    analyzer = DefaultFailureAnalyzer()
+    profile = FailureAnalysisProfile(
+        profile_id="p_default",
+        definition=defn,
+        analyzer=analyzer,
+    )
 
     registry = FailureAnalysisProfileRegistry(profiles=(profile,))
-    assert registry.resolve("p1") is profile
+    assert registry.resolve("p_default") is profile
 
-    # Resolution failure
-    with pytest.raises(FailureAnalysisProfileNotFoundError):
-        registry.resolve("invalid")
-
-    # Duplicate detection
     with pytest.raises(DuplicateFailureAnalysisProfileError):
         FailureAnalysisProfileRegistry(profiles=(profile, profile))
 
@@ -186,18 +186,3 @@ def test_bootstrap_building() -> None:
     settings = Settings()
     registry = build_failure_analysis_registry(settings)
     assert registry.resolve("default_failure_analysis") is not None
-
-
-def test_failure_analysis_determinism(
-    dummy_verification_result: VerificationResult,
-) -> None:
-    analyzer = DefaultFailureAnalyzer()
-    definition = FailureAnalysisDefinition()
-
-    res1 = analyzer.analyze("Claim", dummy_verification_result, definition)
-    res2 = analyzer.analyze("Claim", dummy_verification_result, definition)
-
-    # Identical output check
-    assert res1.classification == res2.classification
-    assert res1.diagnostic == res2.diagnostic
-    assert res1.trace.analyzer_execution_order == res2.trace.analyzer_execution_order

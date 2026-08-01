@@ -1,16 +1,20 @@
-"""Concrete verification failure analysis strategies (M3.1)."""
+"""Concrete verification failure analysis strategies (M3.2)."""
 
+import warnings
+from datetime import datetime
 from typing import Any
 
 from src.core.exceptions import FailureAnalysisConfigurationError
 from src.core.failure.base import BaseFailureAnalyzer
 from src.core.failure.failure_models import (
     FailureAnalysisDefinition,
+    FailureAnalysisInput,
     FailureAnalysisResult,
     FailureCategory,
     FailureClassification,
     FailureDiagnostic,
     FailureRootCause,
+    FailureRuntimeMetadata,
     FailureSeverity,
     FailureTrace,
 )
@@ -18,6 +22,28 @@ from src.core.failure.failure_models import (
 
 class DefaultFailureAnalyzer(BaseFailureAnalyzer):
     """Composably executes failure checks across evidence retrieval and verification outcomes."""
+
+    @property
+    def supported_categories(self) -> tuple[FailureCategory, ...]:
+        """Returns the failure categories supported by this analyzer."""
+        return (
+            FailureCategory.RETRIEVAL,
+            FailureCategory.VERIFICATION,
+            FailureCategory.AGGREGATION,
+            FailureCategory.UNKNOWN,
+        )
+
+    @property
+    def runtime_metadata(self) -> FailureRuntimeMetadata:
+        """Returns runtime execution provenance for reproducible diagnostics."""
+        return FailureRuntimeMetadata(
+            analyzer_id="default_failure_analyzer",
+            analyzer_version="1.1.0",
+            execution_environment="production",
+            execution_device="cpu",
+            framework="python",
+            execution_timestamp=datetime.utcnow().isoformat(),
+        )
 
     def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
         if not isinstance(definition, FailureAnalysisDefinition):
@@ -27,19 +53,39 @@ class DefaultFailureAnalyzer(BaseFailureAnalyzer):
 
     def analyze(
         self,
-        claim: str,
-        verification_result: Any,
-        definition: FailureAnalysisDefinition,
+        claim_or_input: str | FailureAnalysisInput,
+        verification_result: Any = None,
+        definition: Any = None,
     ) -> FailureAnalysisResult:
-        if not isinstance(definition, FailureAnalysisDefinition):
-            raise FailureAnalysisConfigurationError(
-                "DefaultFailureAnalyzer requires FailureAnalysisDefinition."
-            )
+        if isinstance(claim_or_input, FailureAnalysisInput):
+            return self._analyze_canonical(claim_or_input)
 
+        # Deprecated Legacy Adapter path
+        warnings.warn(
+            "The analyze(claim, verification_result, definition) signature is deprecated "
+            "and will be removed in a future release. Use analyze(FailureAnalysisInput) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        input_data = FailureAnalysisInput(
+            claim=claim_or_input,
+            pipeline_artifacts={"verification_result": verification_result},
+            definition=definition,
+        )
+        return self._analyze_canonical(input_data)
+
+    def _analyze_canonical(
+        self, input_data: FailureAnalysisInput
+    ) -> FailureAnalysisResult:
+        """Canonical execution strategy for FailureAnalysisInput."""
         category = FailureCategory.UNKNOWN
         severity = FailureSeverity.INFO
         root_cause = FailureRootCause.UNKNOWN
         diag_summary = "Diagnosis completed with no issues found."
+
+        # Extract artifacts safely
+        verification_result = input_data.pipeline_artifacts.get("verification_result")
 
         # 1. Inspect Retrieval Artifacts
         bundle = getattr(verification_result, "evidence_bundle", None)
@@ -117,12 +163,16 @@ class DefaultFailureAnalyzer(BaseFailureAnalyzer):
         )
         legacy_metadata = FailureMetadata(strategy_id="DefaultFailureAnalyzer")
 
+        from typing import cast
+
+        from src.core.verification.verification_models import VerificationResult
+
         return FailureAnalysisResult(
             classification=classification,
             diagnostic=diagnostic,
             trace=trace,
             failure_flags=frozenset({legacy_flag}),
             severity=legacy_severity_map[severity],
-            verification_result=verification_result,
+            verification_result=cast(VerificationResult, verification_result),
             metadata=legacy_metadata,
         )

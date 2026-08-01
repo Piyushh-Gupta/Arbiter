@@ -1,7 +1,7 @@
-"""Immutable domain models for Verification Failure Analysis Modernization (M3.1)."""
+"""Immutable domain models for Verification Failure Analysis Modernization (M3.2)."""
 
 from enum import Enum
-from typing import Any
+from typing import Any, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
@@ -58,6 +58,41 @@ class FailureClassification(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class FailureArtifactReference(BaseModel):
+    """Immutable reference to an inspected pipeline artifact without owning its mutable state."""
+
+    artifact_id: str = Field(..., min_length=1)
+    artifact_type: str = Field(..., min_length=1)
+    subsystem: str = Field(..., min_length=1)
+    metadata: Mapping[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureRuntimeMetadata(BaseModel):
+    """Immutable metadata tracking analyzer version and execution environment."""
+
+    analyzer_id: str = Field(..., min_length=1)
+    analyzer_version: str = Field(..., min_length=1)
+    execution_environment: str = Field(..., min_length=1)
+    execution_device: str = Field(..., min_length=1)
+    framework: str = Field(..., min_length=1)
+    execution_timestamp: str = Field(..., min_length=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureExecutionMetadata(BaseModel):
+    """Immutable metadata tracking request ID and diagnostic latency."""
+
+    request_id: str = Field(..., min_length=1)
+    execution_duration: float = Field(..., ge=0.0)
+    analyzer_profile: str = Field(..., min_length=1)
+    configuration_fingerprint: str = Field(..., min_length=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
 class FailureDiagnostic(BaseModel):
     """Immutable root-cause analysis details."""
 
@@ -65,6 +100,18 @@ class FailureDiagnostic(BaseModel):
     diagnostic_summary: str = Field(..., min_length=1)
     affected_artifacts: tuple[str, ...] = Field(default_factory=tuple)
     recovery_recommendation: str = Field(default="No action suggested")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureDiagnosticContext(BaseModel):
+    """Immutable context separating root-cause analysis from category classification."""
+
+    ordered_analyzer_outputs: tuple[Any, ...] = Field(default_factory=tuple)
+    inspected_artifact_references: tuple[FailureArtifactReference, ...] = Field(
+        default_factory=tuple
+    )
+    execution_metadata: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=True)
 
@@ -92,6 +139,18 @@ class FailureAnalysisDefinition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class FailureAnalysisInput(BaseModel):
+    """Canonical execution contract for failure analysis input parameters."""
+
+    claim: str = Field(..., min_length=1)
+    pipeline_artifacts: Mapping[str, FailureArtifactReference | Any] = Field(
+        ..., min_length=1
+    )
+    definition: FailureAnalysisDefinition = Field(...)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+
 class FailureAnalysisResult(LegacyFailureAnalysisResult):
     """Immutable output from the failure analysis execution pipeline."""
 
@@ -113,8 +172,25 @@ class FailureAnalysisProfile(BaseModel):
 
     @model_validator(mode="after")
     def _validate_compatibility(self) -> "FailureAnalysisProfile":
+        # 1. Analyzer compatibility validation
         if hasattr(self.analyzer, "validate_compatibility"):
             self.analyzer.validate_compatibility(self.definition)
+
+        # 2. Supported failure categories check
+        categories = getattr(self.analyzer, "supported_categories", None)
+        if categories is not None:
+            for c in categories:
+                if not isinstance(c, FailureCategory):
+                    raise ValueError(f"Invalid FailureCategory: {c}")
+
+        # 3. Metadata compatibility check
+        metadata = getattr(self.analyzer, "runtime_metadata", None)
+        if metadata is not None:
+            if not isinstance(metadata, FailureRuntimeMetadata):
+                raise ValueError(
+                    "Analyzer runtime_metadata must be a FailureRuntimeMetadata instance."
+                )
+
         return self
 
 
