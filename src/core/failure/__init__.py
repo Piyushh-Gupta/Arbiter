@@ -1,5 +1,9 @@
-"""Verification Failure Analysis subsystem (M3.1)."""
+"""Verification Failure Analysis subsystem (M3.5)."""
 
+from src.core.failure.attribution import (
+    BaseRootCauseStrategy,
+    DependencyGraphRootCauseStrategy,
+)
 from src.core.failure.base import BaseFailureAnalyzer, FailureAggregationStrategy
 from src.core.failure.correlation import (
     BaseFailureCorrelationStrategy,
@@ -30,6 +34,15 @@ from src.core.failure.failure_models import (
     FailureRuntimeMetadata,
     FailureSeverity,
     FailureTrace,
+    RootCauseAttributionDefinition,
+    RootCauseProfile,
+    RootCauseProfileRegistry,
+    RootCauseResult,
+    SeverityEvaluationResult,
+    SeverityPolicyDefinition,
+    SeverityPolicyProfile,
+    SeverityPolicyRegistry,
+    SeverityRule,
 )
 from src.core.failure.implementations import (
     CalibrationFailureAnalyzer,
@@ -40,20 +53,22 @@ from src.core.failure.implementations import (
     RetrievalFailureAnalyzer,
     VerificationFailureAnalyzer,
 )
+from src.core.failure.severity import BaseSeverityPolicy, ThresholdSeverityPolicy
+from src.core.failure.traversal import FailureGraphTraverser
 
 __all__ = [
+    # Enums & primitives
     "FailureSeverity",
     "FailureCategory",
     "FailureRootCause",
     "FailureClassification",
     "FailureDiagnostic",
     "FailureTrace",
+    # Analysis definitions & results
     "FailureAnalysisDefinition",
     "FailureAnalysisResult",
     "FailureAnalysisProfile",
     "FailureAnalysisProfileRegistry",
-    "BaseFailureAnalyzer",
-    "DefaultFailureAnalyzer",
     "FailureAnalysisInput",
     "FailureArtifactReference",
     "FailureRuntimeMetadata",
@@ -61,6 +76,9 @@ __all__ = [
     "DiagnosticEvidence",
     "AnalyzerExecutionResult",
     "FailureDiagnosticContext",
+    # Analyzer protocols & implementations
+    "BaseFailureAnalyzer",
+    "DefaultFailureAnalyzer",
     "FailureAggregationStrategy",
     "RetrievalFailureAnalyzer",
     "VerificationFailureAnalyzer",
@@ -68,6 +86,7 @@ __all__ = [
     "InfrastructureFailureAnalyzer",
     "DefaultFailureAggregationStrategy",
     "CompositeFailureAnalyzer",
+    # Correlation models
     "FailureCorrelationDefinition",
     "FailureCorrelationRule",
     "FailureCorrelation",
@@ -77,4 +96,21 @@ __all__ = [
     "FailureCorrelationProfileRegistry",
     "BaseFailureCorrelationStrategy",
     "DefaultFailureCorrelationStrategy",
+    # Traversal
+    "FailureGraphTraverser",
+    # Root cause attribution
+    "RootCauseAttributionDefinition",
+    "RootCauseResult",
+    "RootCauseProfile",
+    "RootCauseProfileRegistry",
+    "BaseRootCauseStrategy",
+    "DependencyGraphRootCauseStrategy",
+    # Severity policy
+    "SeverityRule",
+    "SeverityPolicyDefinition",
+    "SeverityEvaluationResult",
+    "SeverityPolicyProfile",
+    "SeverityPolicyRegistry",
+    "BaseSeverityPolicy",
+    "ThresholdSeverityPolicy",
 ]

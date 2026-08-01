@@ -604,6 +604,131 @@ def build_failure_correlation_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_root_cause_registry(config: AppConfig) -> Any:
+    """Builds the root cause attribution profile registry for M3.5."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import (
+        RootCauseAttributionDefinition,
+        RootCauseProfile,
+        RootCauseProfileRegistry,
+    )
+    from src.core.failure.traversal import FailureGraphTraverser  # noqa: F401
+
+    strategy = DependencyGraphRootCauseStrategy()
+    definition = RootCauseAttributionDefinition()
+
+    try:
+        strategy.validate_compatibility(definition)
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Root cause strategy compatibility validation failed: {e}"
+        ) from e
+
+    profile = RootCauseProfile(
+        profile_id="default_root_cause",
+        definition=definition,
+        strategy=strategy,
+    )
+
+    try:
+        registry = RootCauseProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Root cause registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
+def build_severity_policy_registry(config: AppConfig) -> Any:
+    """Builds the severity policy registry with data-driven SeverityRules for M3.5."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        SeverityPolicyDefinition,
+        SeverityPolicyProfile,
+        SeverityPolicyRegistry,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    rules = (
+        SeverityRule(
+            rule_id="infrastructure_critical",
+            category=FailureCategory.INFRASTRUCTURE,
+            minimum_confidence=0.0,
+            severity=FailureSeverity.CRITICAL,
+            escalation_required=True,
+            priority=1,
+        ),
+        SeverityRule(
+            rule_id="retrieval_high",
+            category=FailureCategory.RETRIEVAL,
+            minimum_confidence=0.0,
+            severity=FailureSeverity.HIGH,
+            escalation_required=False,
+            priority=2,
+        ),
+        SeverityRule(
+            rule_id="verification_high",
+            category=FailureCategory.VERIFICATION,
+            minimum_confidence=0.0,
+            severity=FailureSeverity.HIGH,
+            escalation_required=False,
+            priority=3,
+        ),
+        SeverityRule(
+            rule_id="calibration_medium",
+            category=FailureCategory.CALIBRATION,
+            minimum_confidence=0.0,
+            severity=FailureSeverity.MEDIUM,
+            escalation_required=False,
+            priority=4,
+        ),
+        SeverityRule(
+            rule_id="unknown_low",
+            category=FailureCategory.UNKNOWN,
+            minimum_confidence=0.0,
+            severity=FailureSeverity.LOW,
+            escalation_required=False,
+            priority=5,
+        ),
+    )
+
+    rule_ids = [r.rule_id for r in rules]
+    if len(rule_ids) != len(set(rule_ids)):
+        raise OptimizationConfigurationError(
+            "Duplicate SeverityRule IDs detected during severity policy bootstrap."
+        )
+
+    policy = ThresholdSeverityPolicy()
+    definition = SeverityPolicyDefinition(rules=rules)
+
+    try:
+        policy.validate_compatibility(definition)
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Severity policy compatibility validation failed: {e}"
+        ) from e
+
+    profile = SeverityPolicyProfile(
+        profile_id="default_severity_policy",
+        definition=definition,
+        policy=policy,
+    )
+
+    try:
+        registry = SeverityPolicyRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Severity policy registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_calibration_registry(config: AppConfig) -> Any:
     """Builds and validates the calibration profile registry."""
     import math

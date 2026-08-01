@@ -1,4 +1,4 @@
-"""Immutable domain models for Verification Failure Analysis Modernization (M3.4)."""
+"""Immutable domain models for Verification Failure Analysis Modernization (M3.5)."""
 
 from enum import Enum
 from typing import Any, Mapping
@@ -367,5 +367,183 @@ class FailureCorrelationProfileRegistry(BaseModel):
         if profile_id not in self._profile_index:
             raise FailureAnalysisProfileNotFoundError(
                 f"Failure correlation profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]
+
+
+# --- Root Cause Attribution & Severity Policy Models (M3.5) ---
+
+
+class RootCauseAttributionDefinition(BaseModel):
+    """Immutable configuration driving the root cause attribution engine."""
+
+    enabled_strategies: tuple[str, ...] = Field(default_factory=tuple)
+    traversal_priority: tuple[str, ...] = Field(
+        default=(
+            "INFRASTRUCTURE",
+            "RETRIEVAL",
+            "VERIFICATION",
+            "CALIBRATION",
+            "EXPLAINABILITY",
+            "OPTIMIZATION",
+            "UNKNOWN",
+        )
+    )
+    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RootCauseResult(BaseModel):
+    """Immutable output of root cause attribution over a failure correlation graph."""
+
+    primary_root_cause: str = Field(..., min_length=1)
+    contributing_failures: tuple[str, ...] = Field(default_factory=tuple)
+    dependency_path: tuple[str, ...] = Field(default_factory=tuple)
+    attribution_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    attribution_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class SeverityRule(BaseModel):
+    """Immutable policy rule mapping a failure category to a severity outcome."""
+
+    rule_id: str = Field(..., min_length=1)
+    category: FailureCategory = Field(...)
+    minimum_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    severity: FailureSeverity = Field(...)
+    escalation_required: bool = Field(default=False)
+    priority: int = Field(default=1, ge=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class SeverityPolicyDefinition(BaseModel):
+    """Immutable configuration for a severity policy engine backed by ordered SeverityRules."""
+
+    rules: tuple[SeverityRule, ...] = Field(default_factory=tuple)
+    category_overrides: dict[str, FailureSeverity] = Field(default_factory=dict)
+    default_severity: FailureSeverity = Field(default=FailureSeverity.INFO)
+
+    model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def _validate_rule_ids(self) -> "SeverityPolicyDefinition":
+        rule_ids = [r.rule_id for r in self.rules]
+        if len(rule_ids) != len(set(rule_ids)):
+            raise ValueError(
+                "SeverityPolicyDefinition contains duplicate rule_id values."
+            )
+        return self
+
+
+class SeverityEvaluationResult(BaseModel):
+    """Immutable output of severity policy evaluation over a root cause result."""
+
+    overall_severity: FailureSeverity = Field(...)
+    contributing_severities: tuple[FailureSeverity, ...] = Field(default_factory=tuple)
+    escalation_required: bool = Field(default=False)
+    escalation_reason: str = Field(default="")
+    applied_rule: str | None = Field(default=None)
+    policy_trace: tuple[str, ...] = Field(default_factory=tuple)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RootCauseProfile(BaseModel):
+    """Immutable pairing of a profile identifier with a root cause definition and strategy."""
+
+    profile_id: str = Field(..., min_length=1)
+    definition: RootCauseAttributionDefinition = Field(...)
+    strategy: Any = Field(...)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "RootCauseProfile":
+        if hasattr(self.strategy, "validate_compatibility"):
+            self.strategy.validate_compatibility(self.definition)
+        return self
+
+
+class RootCauseProfileRegistry(BaseModel):
+    """O(1) registry resolver for root cause attribution profiles."""
+
+    profiles: tuple[RootCauseProfile, ...] = Field(..., min_length=1)
+
+    _profile_index: dict[str, RootCauseProfile] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "RootCauseProfileRegistry":
+        from src.core.exceptions import DuplicateFailureAnalysisProfileError
+
+        index: dict[str, RootCauseProfile] = {}
+        for p in self.profiles:
+            if p.profile_id in index:
+                raise DuplicateFailureAnalysisProfileError(
+                    f"Duplicate root cause profile identifier: {p.profile_id}"
+                )
+            index[p.profile_id] = p
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> RootCauseProfile:
+        from src.core.exceptions import FailureAnalysisProfileNotFoundError
+
+        if profile_id not in self._profile_index:
+            raise FailureAnalysisProfileNotFoundError(
+                f"Root cause profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]
+
+
+class SeverityPolicyProfile(BaseModel):
+    """Immutable pairing of a profile identifier with a severity policy definition and policy."""
+
+    profile_id: str = Field(..., min_length=1)
+    definition: SeverityPolicyDefinition = Field(...)
+    policy: Any = Field(...)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "SeverityPolicyProfile":
+        if hasattr(self.policy, "validate_compatibility"):
+            self.policy.validate_compatibility(self.definition)
+        return self
+
+
+class SeverityPolicyRegistry(BaseModel):
+    """O(1) registry resolver for severity policy profiles."""
+
+    profiles: tuple[SeverityPolicyProfile, ...] = Field(..., min_length=1)
+
+    _profile_index: dict[str, SeverityPolicyProfile] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "SeverityPolicyRegistry":
+        from src.core.exceptions import DuplicateFailureAnalysisProfileError
+
+        index: dict[str, SeverityPolicyProfile] = {}
+        for p in self.profiles:
+            if p.profile_id in index:
+                raise DuplicateFailureAnalysisProfileError(
+                    f"Duplicate severity policy profile identifier: {p.profile_id}"
+                )
+            index[p.profile_id] = p
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> SeverityPolicyProfile:
+        from src.core.exceptions import FailureAnalysisProfileNotFoundError
+
+        if profile_id not in self._profile_index:
+            raise FailureAnalysisProfileNotFoundError(
+                f"Severity policy profile not found: {profile_id}"
             )
         return self._profile_index[profile_id]

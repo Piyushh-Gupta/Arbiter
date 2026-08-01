@@ -1,5 +1,7 @@
 """Unit tests for M3.3 Diagnostic Engines."""
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -588,3 +590,420 @@ def test_failure_correlation_registries_and_bootstrap() -> None:
 
     with pytest.raises(DuplicateFailureAnalysisProfileError):
         FailureCorrelationProfileRegistry(profiles=(profile_dup,))
+
+
+# ===========================================================================
+# M3.5 Root Cause Attribution & Severity Policies
+# ===========================================================================
+
+
+def _make_correlation_result_chain() -> "Any":
+    """Helper: build a Retrieval -> Verification -> Calibration correlation chain."""
+    from src.core.failure.failure_models import (
+        FailureCorrelation,
+        FailureCorrelationResult,
+    )
+
+    edge1 = FailureCorrelation(
+        correlation_id="e1",
+        source_failure="retrieval_node",
+        target_failure="verification_node",
+        correlation_confidence=1.0,
+    )
+    edge2 = FailureCorrelation(
+        correlation_id="e2",
+        source_failure="verification_node",
+        target_failure="calibration_node",
+        correlation_confidence=1.0,
+    )
+    return FailureCorrelationResult(
+        correlation_graph=(edge1, edge2),
+        root_failures=("retrieval_node",),
+        dependency_edges={
+            "retrieval_node": ("verification_node",),
+            "verification_node": ("calibration_node",),
+            "calibration_node": (),
+        },
+        summary="test chain",
+    )
+
+
+def test_traverser_root_detection() -> None:
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    traverser = FailureGraphTraverser()
+    roots = traverser.get_root_nodes(result)
+    assert roots == ("retrieval_node",)
+
+
+def test_traverser_downstream_discovery() -> None:
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    traverser = FailureGraphTraverser()
+    downstream = traverser.get_downstream_nodes("retrieval_node", result)
+    assert downstream == ("verification_node",)
+
+
+def test_traverser_all_descendants() -> None:
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    traverser = FailureGraphTraverser()
+    descendants = traverser.get_all_descendants("retrieval_node", result)
+    assert "verification_node" in descendants
+    assert "calibration_node" in descendants
+
+
+def test_traverser_dependency_path() -> None:
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    traverser = FailureGraphTraverser()
+    path = traverser.build_dependency_path("retrieval_node", result)
+    assert path == ("retrieval_node", "verification_node", "calibration_node")
+
+
+def test_root_cause_single_root() -> None:
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import RootCauseAttributionDefinition
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    strategy = DependencyGraphRootCauseStrategy()
+    definition = RootCauseAttributionDefinition()
+    traverser = FailureGraphTraverser()
+
+    rc = strategy.attribute(result, definition, traverser)
+    assert rc.primary_root_cause == "retrieval_node"
+    assert (
+        "verification_node" in rc.contributing_failures
+        or "calibration_node" in rc.contributing_failures
+    )
+    assert rc.dependency_path[0] == "retrieval_node"
+
+
+def test_root_cause_multiple_roots_deterministic_precedence() -> None:
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import (
+        FailureCorrelationResult,
+        RootCauseAttributionDefinition,
+    )
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    # Two independent roots: alphabetically "aaa_node" comes first.
+    result = FailureCorrelationResult(
+        correlation_graph=(),
+        root_failures=("zzz_node", "aaa_node"),
+        dependency_edges={"aaa_node": (), "zzz_node": ()},
+        summary="two independent roots",
+    )
+
+    strategy = DependencyGraphRootCauseStrategy()
+    definition = RootCauseAttributionDefinition()
+    traverser = FailureGraphTraverser()
+
+    rc = strategy.attribute(result, definition, traverser)
+    # Alphabetical tie-breaking: aaa_node < zzz_node
+    assert rc.primary_root_cause == "aaa_node"
+    assert "zzz_node" in rc.contributing_failures
+
+
+def test_root_cause_downstream_filtered_as_contributing() -> None:
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import RootCauseAttributionDefinition
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    strategy = DependencyGraphRootCauseStrategy()
+    definition = RootCauseAttributionDefinition()
+    traverser = FailureGraphTraverser()
+
+    rc = strategy.attribute(result, definition, traverser)
+    # verification_node and calibration_node are downstream — contributing, not primary.
+    assert rc.primary_root_cause != "verification_node"
+    assert rc.primary_root_cause != "calibration_node"
+
+
+def test_root_cause_determinism() -> None:
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import RootCauseAttributionDefinition
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    result = _make_correlation_result_chain()
+    strategy = DependencyGraphRootCauseStrategy()
+    definition = RootCauseAttributionDefinition()
+    traverser = FailureGraphTraverser()
+
+    rc1 = strategy.attribute(result, definition, traverser)
+    rc2 = strategy.attribute(result, definition, traverser)
+    assert rc1 == rc2
+
+
+def test_severity_rule_evaluation() -> None:
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        RootCauseResult,
+        SeverityPolicyDefinition,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    rule = SeverityRule(
+        rule_id="infra_critical",
+        category=FailureCategory.INFRASTRUCTURE,
+        minimum_confidence=0.0,
+        severity=FailureSeverity.CRITICAL,
+        escalation_required=True,
+        priority=1,
+    )
+    definition = SeverityPolicyDefinition(rules=(rule,))
+    policy = ThresholdSeverityPolicy()
+
+    rc = RootCauseResult(
+        primary_root_cause="infra_node",
+        contributing_failures=(),
+        dependency_path=("infra_node",),
+        attribution_confidence=1.0,
+    )
+
+    result = policy.evaluate(rc, definition)
+    assert result.overall_severity == FailureSeverity.CRITICAL
+    assert result.escalation_required is True
+    assert result.applied_rule == "infra_critical"
+
+
+def test_severity_escalation_policy() -> None:
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        RootCauseResult,
+        SeverityPolicyDefinition,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    rule = SeverityRule(
+        rule_id="retrieval_high",
+        category=FailureCategory.RETRIEVAL,
+        minimum_confidence=0.0,
+        severity=FailureSeverity.HIGH,
+        escalation_required=False,
+        priority=1,
+    )
+    definition = SeverityPolicyDefinition(rules=(rule,))
+    policy = ThresholdSeverityPolicy()
+
+    rc = RootCauseResult(
+        primary_root_cause="retrieval_node",
+        contributing_failures=(),
+        dependency_path=("retrieval_node",),
+        attribution_confidence=1.0,
+    )
+    result = policy.evaluate(rc, definition)
+    assert result.overall_severity == FailureSeverity.HIGH
+    assert result.escalation_required is False
+
+
+def test_severity_category_override() -> None:
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        RootCauseResult,
+        SeverityPolicyDefinition,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    rule = SeverityRule(
+        rule_id="retrieval_rule",
+        category=FailureCategory.RETRIEVAL,
+        minimum_confidence=0.0,
+        severity=FailureSeverity.HIGH,
+        escalation_required=False,
+        priority=1,
+    )
+    # Override: RETRIEVAL should map to CRITICAL instead.
+    definition = SeverityPolicyDefinition(
+        rules=(rule,),
+        category_overrides={"RETRIEVAL": FailureSeverity.CRITICAL},
+    )
+    policy = ThresholdSeverityPolicy()
+
+    rc = RootCauseResult(
+        primary_root_cause="retrieval_node",
+        contributing_failures=(),
+        dependency_path=("retrieval_node",),
+        attribution_confidence=1.0,
+    )
+    result = policy.evaluate(rc, definition)
+    # Override takes precedence.
+    assert result.overall_severity == FailureSeverity.CRITICAL
+
+
+def test_severity_default_when_no_rules_match() -> None:
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        RootCauseResult,
+        SeverityPolicyDefinition,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    rule = SeverityRule(
+        rule_id="infra_rule",
+        category=FailureCategory.INFRASTRUCTURE,
+        minimum_confidence=0.99,  # High threshold — will not match confidence=0.1
+        severity=FailureSeverity.CRITICAL,
+        escalation_required=True,
+        priority=1,
+    )
+    definition = SeverityPolicyDefinition(
+        rules=(rule,),
+        default_severity=FailureSeverity.LOW,
+    )
+    policy = ThresholdSeverityPolicy()
+
+    rc = RootCauseResult(
+        primary_root_cause="infra_node",
+        contributing_failures=(),
+        dependency_path=("infra_node",),
+        attribution_confidence=0.1,  # Below minimum_confidence
+    )
+    result = policy.evaluate(rc, definition)
+    assert result.overall_severity == FailureSeverity.LOW
+    assert result.applied_rule is None
+
+
+def test_severity_determinism() -> None:
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        RootCauseResult,
+        SeverityPolicyDefinition,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    rule = SeverityRule(
+        rule_id="r1",
+        category=FailureCategory.RETRIEVAL,
+        minimum_confidence=0.0,
+        severity=FailureSeverity.HIGH,
+        escalation_required=False,
+        priority=1,
+    )
+    definition = SeverityPolicyDefinition(rules=(rule,))
+    policy = ThresholdSeverityPolicy()
+    rc = RootCauseResult(
+        primary_root_cause="retrieval_node",
+        contributing_failures=(),
+        dependency_path=("retrieval_node",),
+        attribution_confidence=1.0,
+    )
+    result1 = policy.evaluate(rc, definition)
+    result2 = policy.evaluate(rc, definition)
+    assert result1 == result2
+
+
+def test_root_cause_registry_duplicate_detection() -> None:
+    from src.core.exceptions import DuplicateFailureAnalysisProfileError
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import (
+        RootCauseAttributionDefinition,
+        RootCauseProfile,
+        RootCauseProfileRegistry,
+    )
+
+    strategy = DependencyGraphRootCauseStrategy()
+    definition = RootCauseAttributionDefinition()
+    profile = RootCauseProfile(
+        profile_id="dup_rc",
+        definition=definition,
+        strategy=strategy,
+    )
+    with pytest.raises(DuplicateFailureAnalysisProfileError):
+        RootCauseProfileRegistry(profiles=(profile, profile))
+
+
+def test_severity_registry_duplicate_detection() -> None:
+    from src.core.exceptions import DuplicateFailureAnalysisProfileError
+    from src.core.failure.failure_models import (
+        SeverityPolicyDefinition,
+        SeverityPolicyProfile,
+        SeverityPolicyRegistry,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    policy = ThresholdSeverityPolicy()
+    definition = SeverityPolicyDefinition()
+    profile = SeverityPolicyProfile(
+        profile_id="dup_sev",
+        definition=definition,
+        policy=policy,
+    )
+    with pytest.raises(DuplicateFailureAnalysisProfileError):
+        SeverityPolicyRegistry(profiles=(profile, profile))
+
+
+def test_bootstrap_root_cause_registry() -> None:
+    from src.core.bootstrap import build_root_cause_registry
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+
+    settings = Settings()
+    registry = build_root_cause_registry(settings)
+    profile = registry.resolve("default_root_cause")
+    assert profile is not None
+    assert isinstance(profile.strategy, DependencyGraphRootCauseStrategy)
+
+
+def test_bootstrap_severity_policy_registry() -> None:
+    from src.core.bootstrap import build_severity_policy_registry
+    from src.core.failure.severity import ThresholdSeverityPolicy
+
+    settings = Settings()
+    registry = build_severity_policy_registry(settings)
+    profile = registry.resolve("default_severity_policy")
+    assert profile is not None
+    assert isinstance(profile.policy, ThresholdSeverityPolicy)
+    assert len(profile.definition.rules) == 5
+
+
+def test_m35_end_to_end_integration() -> None:
+    """FailureCorrelationResult -> Traverser -> Attribution -> Severity."""
+    from src.core.failure.attribution import DependencyGraphRootCauseStrategy
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureSeverity,
+        RootCauseAttributionDefinition,
+        SeverityPolicyDefinition,
+        SeverityRule,
+    )
+    from src.core.failure.severity import ThresholdSeverityPolicy
+    from src.core.failure.traversal import FailureGraphTraverser
+
+    correlation_result = _make_correlation_result_chain()
+    traverser = FailureGraphTraverser()
+    strategy = DependencyGraphRootCauseStrategy()
+    rc_definition = RootCauseAttributionDefinition()
+
+    root_cause = strategy.attribute(correlation_result, rc_definition, traverser)
+    assert root_cause.primary_root_cause == "retrieval_node"
+
+    sev_rule = SeverityRule(
+        rule_id="retrieval_high",
+        category=FailureCategory.RETRIEVAL,
+        minimum_confidence=0.0,
+        severity=FailureSeverity.HIGH,
+        escalation_required=False,
+        priority=1,
+    )
+    sev_definition = SeverityPolicyDefinition(rules=(sev_rule,))
+    sev_policy = ThresholdSeverityPolicy()
+
+    sev_result = sev_policy.evaluate(root_cause, sev_definition)
+    assert sev_result.overall_severity == FailureSeverity.HIGH
+    assert sev_result.applied_rule == "retrieval_high"
