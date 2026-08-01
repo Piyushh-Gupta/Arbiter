@@ -952,3 +952,50 @@ def build_pipeline(config: AppConfig) -> ArbiterPipeline:
         explanation_registry=build_explanation_registry(config, ver_reg, cal_reg),
         evaluation_registry=build_evaluation_registry(config),
     )
+
+
+def build_verification_optimization_registry(
+    config: AppConfig,
+) -> Any:
+    """Builds and validates the verification optimization registry."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.verification.optimization.optimization_models import (
+        VerificationOptimizationDefinition,
+        VerificationOptimizationProfile,
+        VerificationOptimizationProfileRegistry,
+    )
+
+    # 1. Define configurations
+    definition = VerificationOptimizationDefinition()
+
+    # 2. Synchronous startup validation
+    if definition.request_timeout_ms <= 0:
+        raise OptimizationConfigurationError("timeout must be > 0.")
+    if definition.verifier_batch_size <= 0:
+        raise OptimizationConfigurationError("verifier_batch_size must be > 0.")
+    if definition.aggregation_batch_size <= 0:
+        raise OptimizationConfigurationError("aggregation_batch_size must be > 0.")
+    if definition.calibration_batch_size <= 0:
+        raise OptimizationConfigurationError("calibration_batch_size must be > 0.")
+    if definition.explanation_batch_size <= 0:
+        raise OptimizationConfigurationError("explanation_batch_size must be > 0.")
+    if definition.max_concurrent_requests <= 0:
+        raise OptimizationConfigurationError("max_concurrent_requests must be > 0.")
+    if definition.prefetch_size <= 0:
+        raise OptimizationConfigurationError("prefetch_size must be > 0.")
+    if not isinstance(definition.telemetry_enabled, bool):
+        raise OptimizationConfigurationError("telemetry_enabled must be a boolean.")
+
+    profile = VerificationOptimizationProfile(
+        profile_id="default_optimization",
+        definition=definition,
+    )
+
+    try:
+        registry = VerificationOptimizationProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Verification optimization registry validation failed: {e}"
+        ) from e
+
+    return registry

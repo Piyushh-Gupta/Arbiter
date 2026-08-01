@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     explainability: "ExplainabilitySettings" = Field(
         default_factory=lambda: ExplainabilitySettings()
     )
+    verification_optimization: "VerificationOptimizationSettings" = Field(
+        default_factory=lambda: VerificationOptimizationSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -111,6 +114,12 @@ class ExplainabilitySettings(BaseModel):
     """Configuration settings for explainability."""
 
     default_profile: str = Field(default="composite_explanation")
+
+
+class VerificationOptimizationSettings(BaseModel):
+    """Configuration settings for verification production optimization."""
+
+    default_profile: str = Field(default="default_optimization")
 
 
 settings = Settings()
