@@ -729,6 +729,44 @@ def build_severity_policy_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_failure_benchmark_registry(config: AppConfig) -> Any:
+    """Builds the failure benchmark profile registry for M3.6."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.failure.benchmark.benchmark_models import (
+        FailureBenchmarkDefinition,
+        FailureBenchmarkProfile,
+        FailureBenchmarkProfileRegistry,
+    )
+    from src.core.failure.benchmark.metrics import FailureMetricEngine
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    metric_engine = FailureMetricEngine()
+    runner = FailureBenchmarkRunner(metric_engine=metric_engine)
+    definition = FailureBenchmarkDefinition()
+
+    try:
+        runner.validate_compatibility(definition)
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Failure benchmark runner compatibility validation failed: {e}"
+        ) from e
+
+    profile = FailureBenchmarkProfile(
+        profile_id="default_failure_benchmark",
+        definition=definition,
+        runner=runner,
+    )
+
+    try:
+        registry = FailureBenchmarkProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Failure benchmark registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_calibration_registry(config: AppConfig) -> Any:
     """Builds and validates the calibration profile registry."""
     import math

@@ -1007,3 +1007,374 @@ def test_m35_end_to_end_integration() -> None:
     sev_result = sev_policy.evaluate(root_cause, sev_definition)
     assert sev_result.overall_severity == FailureSeverity.HIGH
     assert sev_result.applied_rule == "retrieval_high"
+
+
+# ===========================================================================
+# M3.6 Failure Benchmarking & Evaluation Framework
+# ===========================================================================
+
+
+def _make_benchmark_item(
+    item_id: str = "item1",
+    expected_category: "Any" = None,
+    expected_root_cause: "Any" = None,
+    expected_severity: "Any" = None,
+) -> "Any":
+    """Helper: build a FailureBenchmarkItem with real analyzer results."""
+    from src.core.failure.benchmark.benchmark_models import FailureBenchmarkItem
+    from src.core.failure.failure_models import (
+        AnalyzerExecutionResult,
+        FailureCategory,
+        FailureClassification,
+        FailureRootCause,
+        FailureRuntimeMetadata,
+        FailureSeverity,
+    )
+
+    expected_category = expected_category or FailureCategory.RETRIEVAL
+    expected_root_cause = expected_root_cause or FailureRootCause.LOW_RETRIEVAL_RECALL
+    expected_severity = expected_severity or FailureSeverity.HIGH
+
+    r_meta = FailureRuntimeMetadata(
+        analyzer_id="test_analyzer",
+        analyzer_version="1.0",
+        execution_environment="test",
+        execution_device="cpu",
+        framework="python",
+        execution_timestamp="now",
+    )
+
+    exec_result = AnalyzerExecutionResult(
+        analyzer_id="test_analyzer",
+        execution_order=0,
+        classification=FailureClassification(
+            category=expected_category,
+            severity=expected_severity,
+            affected_subsystem="retrieval",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    return FailureBenchmarkItem(
+        item_id=item_id,
+        analyzer_execution_results=(exec_result,),
+        expected_category=expected_category,
+        expected_root_cause=expected_root_cause,
+        expected_severity=expected_severity,
+    )
+
+
+def _make_simple_dataset(items: "Any") -> "Any":
+    """In-memory dataset for testing."""
+
+    class _InMemoryDataset:
+        @property
+        def name(self) -> str:
+            return "test_dataset"
+
+        @property
+        def version(self) -> str:
+            return "1.0"
+
+        @property
+        def description(self) -> str:
+            return "Test-only synthetic dataset."
+
+        def items(self) -> tuple[Any, ...]:
+            return tuple(items)
+
+    return _InMemoryDataset()
+
+
+def test_benchmark_item_valid_construction() -> None:
+    item = _make_benchmark_item()
+    assert item.item_id == "item1"
+    assert item.analyzer_execution_results is not None
+
+
+def test_benchmark_item_invalid_construction() -> None:
+    from pydantic import ValidationError
+
+    from src.core.failure.benchmark.benchmark_models import FailureBenchmarkItem
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureRootCause,
+        FailureSeverity,
+    )
+
+    with pytest.raises(ValidationError):
+        FailureBenchmarkItem(
+            item_id="",  # violates min_length=1
+            analyzer_execution_results=(),
+            expected_category=FailureCategory.RETRIEVAL,
+            expected_root_cause=FailureRootCause.UNKNOWN,
+            expected_severity=FailureSeverity.INFO,
+        )
+
+
+def test_metric_engine_accuracy() -> None:
+    from src.core.failure.benchmark.metrics import (
+        AccuracyCalculator,
+        FailureBenchmarkRawOutput,
+        FailureMetricEngine,
+    )
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureRootCause,
+        FailureSeverity,
+    )
+
+    item = _make_benchmark_item(expected_category=FailureCategory.RETRIEVAL)
+    raw = FailureBenchmarkRawOutput()
+    raw.items.append(item)
+    raw.actual_categories.append(FailureCategory.RETRIEVAL)  # correct
+    raw.actual_root_causes.append(FailureRootCause.UNKNOWN)
+    raw.actual_severities.append(FailureSeverity.HIGH)
+    raw.latencies_ms.append(1.5)
+    raw.repeated_categories.append([FailureCategory.RETRIEVAL])
+
+    acc = AccuracyCalculator().calculate(raw)
+    assert acc == 1.0
+
+    engine = FailureMetricEngine()
+    result = engine.compute(raw, ())
+    assert result.metric_values["classification_accuracy"] == 1.0
+
+
+def test_metric_engine_attribution_accuracy() -> None:
+    from src.core.failure.benchmark.metrics import (
+        AttributionAccuracyCalculator,
+        FailureBenchmarkRawOutput,
+    )
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureRootCause,
+        FailureSeverity,
+    )
+
+    item = _make_benchmark_item(
+        expected_root_cause=FailureRootCause.LOW_RETRIEVAL_RECALL
+    )
+    raw = FailureBenchmarkRawOutput()
+    raw.items.append(item)
+    raw.actual_categories.append(FailureCategory.RETRIEVAL)
+    raw.actual_root_causes.append(FailureRootCause.LOW_RETRIEVAL_RECALL)  # correct
+    raw.actual_severities.append(FailureSeverity.HIGH)
+    raw.latencies_ms.append(2.0)
+
+    calc = AttributionAccuracyCalculator()
+    assert calc.calculate(raw) == 1.0
+
+
+def test_metric_engine_severity_consistency() -> None:
+    from src.core.failure.benchmark.metrics import (
+        FailureBenchmarkRawOutput,
+        SeverityConsistencyCalculator,
+    )
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureRootCause,
+        FailureSeverity,
+    )
+
+    item = _make_benchmark_item(expected_severity=FailureSeverity.HIGH)
+    raw = FailureBenchmarkRawOutput()
+    raw.items.append(item)
+    raw.actual_categories.append(FailureCategory.RETRIEVAL)
+    raw.actual_root_causes.append(FailureRootCause.UNKNOWN)
+    raw.actual_severities.append(FailureSeverity.HIGH)  # matches expected
+    raw.latencies_ms.append(1.0)
+
+    assert SeverityConsistencyCalculator().calculate(raw) == 1.0
+
+
+def test_metric_engine_latency_metrics() -> None:
+    from src.core.failure.benchmark.metrics import (
+        FailureBenchmarkRawOutput,
+        MeanLatencyCalculator,
+        P95LatencyCalculator,
+        P99LatencyCalculator,
+    )
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureRootCause,
+        FailureSeverity,
+    )
+
+    raw = FailureBenchmarkRawOutput()
+    for i in range(10):
+        item = _make_benchmark_item(item_id=f"item{i}")
+        raw.items.append(item)
+        raw.actual_categories.append(FailureCategory.RETRIEVAL)
+        raw.actual_root_causes.append(FailureRootCause.UNKNOWN)
+        raw.actual_severities.append(FailureSeverity.HIGH)
+        raw.latencies_ms.append(float(i + 1))
+
+    mean = MeanLatencyCalculator().calculate(raw)
+    assert abs(mean - 5.5) < 0.01
+
+    p95 = P95LatencyCalculator().calculate(raw)
+    assert p95 >= 9.0
+
+    p99 = P99LatencyCalculator().calculate(raw)
+    assert p99 >= 9.0
+
+
+def test_benchmark_runner_single_item() -> None:
+    from src.core.failure.benchmark.benchmark_models import (
+        FailureBenchmarkDefinition,
+        FailureBenchmarkSuite,
+    )
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    item = _make_benchmark_item()
+    dataset = _make_simple_dataset([item])
+
+    suite = FailureBenchmarkSuite(
+        suite_id="test_suite",
+        dataset=dataset,
+        enabled_metrics=(),
+        evaluation_profile="default",
+    )
+    definition = FailureBenchmarkDefinition(determinism_runs=1)
+    runner = FailureBenchmarkRunner()
+
+    report = runner.run(suite, definition)
+    assert report.configuration_fingerprint
+    assert report.execution_timestamp
+    assert "classification_accuracy" in report.result.metric_values
+
+
+def test_benchmark_runner_multiple_items() -> None:
+    from src.core.failure.benchmark.benchmark_models import (
+        FailureBenchmarkDefinition,
+        FailureBenchmarkSuite,
+    )
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    items = [_make_benchmark_item(item_id=f"item{i}") for i in range(5)]
+    dataset = _make_simple_dataset(items)
+
+    suite = FailureBenchmarkSuite(
+        suite_id="multi_suite",
+        dataset=dataset,
+        enabled_metrics=(),
+        evaluation_profile="default",
+    )
+    definition = FailureBenchmarkDefinition(determinism_runs=2)
+    runner = FailureBenchmarkRunner()
+
+    report = runner.run(suite, definition)
+    assert report.result.execution_metadata["item_count"] == 5
+    assert report.result.metric_values["classification_accuracy"] == 1.0
+
+
+def test_benchmark_determinism() -> None:
+    from src.core.failure.benchmark.benchmark_models import (
+        FailureBenchmarkDefinition,
+        FailureBenchmarkSuite,
+    )
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    item = _make_benchmark_item()
+    dataset = _make_simple_dataset([item])
+    suite = FailureBenchmarkSuite(
+        suite_id="det_suite",
+        dataset=dataset,
+        enabled_metrics=(),
+        evaluation_profile="default",
+    )
+    definition = FailureBenchmarkDefinition(determinism_runs=3)
+    runner = FailureBenchmarkRunner()
+
+    report1 = runner.run(suite, definition)
+    report2 = runner.run(suite, definition)
+
+    # Configuration fingerprint must be identical across runs.
+    assert report1.configuration_fingerprint == report2.configuration_fingerprint
+
+    # Logic-driven metrics (non-latency) must be identical across runs.
+    _latency_metrics = {
+        "mean_latency_ms",
+        "p95_latency_ms",
+        "p99_latency_ms",
+        "throughput_items_per_sec",
+    }
+    logic_values_1 = {
+        k: v
+        for k, v in report1.result.metric_values.items()
+        if k not in _latency_metrics
+    }
+    logic_values_2 = {
+        k: v
+        for k, v in report2.result.metric_values.items()
+        if k not in _latency_metrics
+    }
+    assert logic_values_1 == logic_values_2
+
+
+def test_benchmark_registry_duplicate_detection() -> None:
+    from src.core.exceptions import DuplicateFailureAnalysisProfileError
+    from src.core.failure.benchmark.benchmark_models import (
+        FailureBenchmarkDefinition,
+        FailureBenchmarkProfile,
+        FailureBenchmarkProfileRegistry,
+    )
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    runner = FailureBenchmarkRunner()
+    definition = FailureBenchmarkDefinition()
+    profile = FailureBenchmarkProfile(
+        profile_id="dup_bench",
+        definition=definition,
+        runner=runner,
+    )
+    with pytest.raises(DuplicateFailureAnalysisProfileError):
+        FailureBenchmarkProfileRegistry(profiles=(profile, profile))
+
+
+def test_benchmark_bootstrap_registry() -> None:
+    from src.core.bootstrap import build_failure_benchmark_registry
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    settings = Settings()
+    registry = build_failure_benchmark_registry(settings)
+    profile = registry.resolve("default_failure_benchmark")
+    assert profile is not None
+    assert isinstance(profile.runner, FailureBenchmarkRunner)
+
+
+def test_m36_end_to_end_integration() -> None:
+    """FailureBenchmarkSuite -> Runner -> MetricEngine -> FailureBenchmarkReport."""
+    from src.core.failure.benchmark.benchmark_models import (
+        FailureBenchmarkDefinition,
+        FailureBenchmarkSuite,
+    )
+    from src.core.failure.benchmark.metrics import FailureMetricEngine
+    from src.core.failure.benchmark.runner import FailureBenchmarkRunner
+
+    items = [_make_benchmark_item(item_id=f"item{i}") for i in range(3)]
+    dataset = _make_simple_dataset(items)
+
+    suite = FailureBenchmarkSuite(
+        suite_id="e2e_suite",
+        dataset=dataset,
+        enabled_metrics=(
+            "classification_accuracy",
+            "attribution_accuracy",
+            "mean_latency_ms",
+        ),
+        evaluation_profile="default",
+    )
+    definition = FailureBenchmarkDefinition(determinism_runs=2)
+    engine = FailureMetricEngine()
+    runner = FailureBenchmarkRunner(metric_engine=engine)
+
+    report = runner.run(suite, definition)
+    assert report.result.metric_values["classification_accuracy"] == 1.0
+    assert (
+        report.result.metric_values["attribution_accuracy"] == 0.0
+    )  # UNKNOWN != LOW_RETRIEVAL_RECALL
+    assert report.result.metric_values["mean_latency_ms"] >= 0.0
+    assert len(report.benchmark_trace) >= 3  # suite + items + items_processed
