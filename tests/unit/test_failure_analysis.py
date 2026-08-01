@@ -346,3 +346,245 @@ def test_legacy_compatibility(dummy_verification_result: VerificationResult) -> 
 
     assert res_legacy.classification is not None
     assert res_legacy.diagnostic is not None
+
+
+def test_failure_correlation_identity() -> None:
+    from src.core.failure.correlation import DefaultFailureCorrelationStrategy
+    from src.core.failure.failure_models import (
+        AnalyzerExecutionResult,
+        FailureCategory,
+        FailureClassification,
+        FailureCorrelationContext,
+        FailureRuntimeMetadata,
+        FailureSeverity,
+    )
+
+    r_meta = FailureRuntimeMetadata(
+        analyzer_id="r1",
+        analyzer_version="1.0",
+        execution_environment="prod",
+        execution_device="cpu",
+        framework="python",
+        execution_timestamp="now",
+    )
+
+    res = AnalyzerExecutionResult(
+        analyzer_id="r1",
+        execution_order=0,
+        classification=FailureClassification(
+            category=FailureCategory.RETRIEVAL,
+            severity=FailureSeverity.CRITICAL,
+            affected_subsystem="retrieval",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    strategy = DefaultFailureCorrelationStrategy()
+    context = FailureCorrelationContext(
+        analyzer_execution_results=(res,),
+        correlation_rules=(),
+    )
+
+    correlated = strategy.correlate(context)
+    # A single node with no rules produces no edges, but node is represented in the root list
+    assert len(correlated.correlation_graph) == 0
+    assert correlated.root_failures == ("r1",)
+
+
+def test_failure_correlation_dependency_graph() -> None:
+    from src.core.failure.correlation import DefaultFailureCorrelationStrategy
+    from src.core.failure.failure_models import (
+        AnalyzerExecutionResult,
+        FailureCategory,
+        FailureClassification,
+        FailureCorrelationContext,
+        FailureCorrelationRule,
+        FailureRuntimeMetadata,
+        FailureSeverity,
+    )
+
+    r_meta = FailureRuntimeMetadata(
+        analyzer_id="r1",
+        analyzer_version="1.0",
+        execution_environment="prod",
+        execution_device="cpu",
+        framework="python",
+        execution_timestamp="now",
+    )
+
+    # Retrieval failure
+    res_ret = AnalyzerExecutionResult(
+        analyzer_id="retrieval_analyzer",
+        execution_order=0,
+        classification=FailureClassification(
+            category=FailureCategory.RETRIEVAL,
+            severity=FailureSeverity.CRITICAL,
+            affected_subsystem="retrieval",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    # Verification failure
+    res_ver = AnalyzerExecutionResult(
+        analyzer_id="verification_analyzer",
+        execution_order=1,
+        classification=FailureClassification(
+            category=FailureCategory.VERIFICATION,
+            severity=FailureSeverity.HIGH,
+            affected_subsystem="verification",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    # Calibration failure
+    res_cal = AnalyzerExecutionResult(
+        analyzer_id="calibration_analyzer",
+        execution_order=2,
+        classification=FailureClassification(
+            category=FailureCategory.CALIBRATION,
+            severity=FailureSeverity.HIGH,
+            affected_subsystem="calibration",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    # Rules: Retrieval -> Verification, Verification -> Calibration
+    rule1 = FailureCorrelationRule(
+        rule_id="rule1",
+        source_category=FailureCategory.RETRIEVAL,
+        target_category=FailureCategory.VERIFICATION,
+        precedence=1,
+        enabled=True,
+    )
+    rule2 = FailureCorrelationRule(
+        rule_id="rule2",
+        source_category=FailureCategory.VERIFICATION,
+        target_category=FailureCategory.CALIBRATION,
+        precedence=1,
+        enabled=True,
+    )
+
+    strategy = DefaultFailureCorrelationStrategy()
+    context = FailureCorrelationContext(
+        analyzer_execution_results=(res_ret, res_ver, res_cal),
+        correlation_rules=(rule1, rule2),
+    )
+
+    correlated = strategy.correlate(context)
+    assert len(correlated.correlation_graph) == 2
+    # root failure should be retrieval_analyzer since verification_analyzer and calibration_analyzer have in-degree > 0
+    assert correlated.root_failures == ("retrieval_analyzer",)
+    assert correlated.dependency_edges["retrieval_analyzer"] == (
+        "verification_analyzer",
+    )
+    assert correlated.dependency_edges["verification_analyzer"] == (
+        "calibration_analyzer",
+    )
+
+
+def test_failure_correlation_independent_failures() -> None:
+    from src.core.failure.correlation import DefaultFailureCorrelationStrategy
+    from src.core.failure.failure_models import (
+        AnalyzerExecutionResult,
+        FailureCategory,
+        FailureClassification,
+        FailureCorrelationContext,
+        FailureCorrelationRule,
+        FailureRuntimeMetadata,
+        FailureSeverity,
+    )
+
+    r_meta = FailureRuntimeMetadata(
+        analyzer_id="r1",
+        analyzer_version="1.0",
+        execution_environment="prod",
+        execution_device="cpu",
+        framework="python",
+        execution_timestamp="now",
+    )
+
+    res_ret = AnalyzerExecutionResult(
+        analyzer_id="retrieval_analyzer",
+        execution_order=0,
+        classification=FailureClassification(
+            category=FailureCategory.RETRIEVAL,
+            severity=FailureSeverity.CRITICAL,
+            affected_subsystem="retrieval",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    res_cal = AnalyzerExecutionResult(
+        analyzer_id="calibration_analyzer",
+        execution_order=1,
+        classification=FailureClassification(
+            category=FailureCategory.CALIBRATION,
+            severity=FailureSeverity.HIGH,
+            affected_subsystem="calibration",
+        ),
+        diagnostic_evidence=(),
+        runtime_metadata=r_meta,
+    )
+
+    # Rule (unmatched): Verification -> Calibration
+    rule1 = FailureCorrelationRule(
+        rule_id="rule1",
+        source_category=FailureCategory.VERIFICATION,
+        target_category=FailureCategory.CALIBRATION,
+        precedence=1,
+        enabled=True,
+    )
+
+    strategy = DefaultFailureCorrelationStrategy()
+    context = FailureCorrelationContext(
+        analyzer_execution_results=(res_ret, res_cal),
+        correlation_rules=(rule1,),
+    )
+
+    correlated = strategy.correlate(context)
+    # No matches, so both are independent roots
+    assert len(correlated.correlation_graph) == 0
+    assert "retrieval_analyzer" in correlated.root_failures
+    assert "calibration_analyzer" in correlated.root_failures
+
+
+def test_failure_correlation_registries_and_bootstrap() -> None:
+    from src.core.bootstrap import build_failure_correlation_registry
+    from src.core.failure.correlation import DefaultFailureCorrelationStrategy
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureCorrelationDefinition,
+        FailureCorrelationProfile,
+        FailureCorrelationProfileRegistry,
+        FailureCorrelationRule,
+    )
+
+    # Test bootstrap builder
+    settings = Settings()
+    registry = build_failure_correlation_registry(settings)
+    profile = registry.resolve("default_failure_correlation")
+    assert profile is not None
+    assert isinstance(profile.strategy, DefaultFailureCorrelationStrategy)
+    assert len(profile.rules) == 3
+
+    # Test duplicate rule detection
+    rule1 = FailureCorrelationRule(
+        rule_id="dup_rule",
+        source_category=FailureCategory.RETRIEVAL,
+        target_category=FailureCategory.VERIFICATION,
+    )
+    profile_dup = FailureCorrelationProfile(
+        profile_id="dup_profile",
+        definition=FailureCorrelationDefinition(),
+        rules=(rule1, rule1),
+        strategy=DefaultFailureCorrelationStrategy(),
+    )
+    from src.core.exceptions import DuplicateFailureAnalysisProfileError
+
+    with pytest.raises(DuplicateFailureAnalysisProfileError):
+        FailureCorrelationProfileRegistry(profiles=(profile_dup,))

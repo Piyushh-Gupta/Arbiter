@@ -1,4 +1,4 @@
-"""Immutable domain models for Verification Failure Analysis Modernization (M3.3)."""
+"""Immutable domain models for Verification Failure Analysis Modernization (M3.4)."""
 
 from enum import Enum
 from typing import Any, Mapping
@@ -248,5 +248,124 @@ class FailureAnalysisProfileRegistry(BaseModel):
         if profile_id not in self._profile_index:
             raise FailureAnalysisProfileNotFoundError(
                 f"Failure analysis profile not found: {profile_id}"
+            )
+        return self._profile_index[profile_id]
+
+
+# --- Failure Correlation Subsystem Models (M3.4) ---
+
+
+class FailureCorrelationDefinition(BaseModel):
+    """Immutable configuration options for failure correlation engine."""
+
+    enabled_strategies: tuple[str, ...] = Field(default_factory=tuple)
+    maximum_graph_depth: int = Field(default=5, ge=1)
+    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    grouping_policy: str = Field(default="default")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureCorrelationRule(BaseModel):
+    """Immutable data-driven rule defining a dependency relationship between failure categories."""
+
+    rule_id: str = Field(..., min_length=1)
+    source_category: FailureCategory = Field(...)
+    target_category: FailureCategory = Field(...)
+    precedence: int = Field(default=1, ge=1)
+    enabled: bool = Field(default=True)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureCorrelation(BaseModel):
+    """Immutable representation of a single directed correlation edge between failure occurrences."""
+
+    correlation_id: str = Field(..., min_length=1)
+    source_failure: str = Field(..., min_length=1)
+    target_failure: str = Field(..., min_length=1)
+    correlation_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureCorrelationContext(BaseModel):
+    """Immutable context carried into the failure correlation pipeline."""
+
+    analyzer_execution_results: tuple[AnalyzerExecutionResult, ...] = Field(
+        default_factory=tuple
+    )
+    correlation_rules: tuple[FailureCorrelationRule, ...] = Field(default_factory=tuple)
+    execution_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureCorrelationResult(BaseModel):
+    """Immutable correlation output containing the dependency DAG representation."""
+
+    correlation_graph: tuple[FailureCorrelation, ...] = Field(default_factory=tuple)
+    root_failures: tuple[str, ...] = Field(default_factory=tuple)
+    dependency_edges: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    summary: str = Field(..., min_length=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class FailureCorrelationProfile(BaseModel):
+    """Immutable configuration binding a profile identifier with definitions, rules, and strategy."""
+
+    profile_id: str = Field(..., min_length=1)
+    definition: FailureCorrelationDefinition = Field(...)
+    rules: tuple[FailureCorrelationRule, ...] = Field(default_factory=tuple)
+    strategy: Any = Field(...)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _validate_compatibility(self) -> "FailureCorrelationProfile":
+        if hasattr(self.strategy, "validate_compatibility"):
+            self.strategy.validate_compatibility(self.definition)
+        return self
+
+
+class FailureCorrelationProfileRegistry(BaseModel):
+    """O(1) registry resolver for failure correlation profiles."""
+
+    profiles: tuple[FailureCorrelationProfile, ...] = Field(..., min_length=1)
+
+    _profile_index: dict[str, FailureCorrelationProfile] = PrivateAttr(
+        default_factory=dict
+    )
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "FailureCorrelationProfileRegistry":
+        from src.core.exceptions import DuplicateFailureAnalysisProfileError
+
+        index: dict[str, FailureCorrelationProfile] = {}
+        for p in self.profiles:
+            if p.profile_id in index:
+                raise DuplicateFailureAnalysisProfileError(
+                    f"Duplicate correlation profile identifier: {p.profile_id}"
+                )
+            # Duplicate rule checks within each profile
+            rule_ids = [r.rule_id for r in p.rules]
+            if len(rule_ids) != len(set(rule_ids)):
+                raise DuplicateFailureAnalysisProfileError(
+                    f"Duplicate rule identifier inside profile {p.profile_id}"
+                )
+
+            index[p.profile_id] = p
+        object.__setattr__(self, "_profile_index", index)
+        return self
+
+    def resolve(self, profile_id: str) -> FailureCorrelationProfile:
+        from src.core.exceptions import FailureAnalysisProfileNotFoundError
+
+        if profile_id not in self._profile_index:
+            raise FailureAnalysisProfileNotFoundError(
+                f"Failure correlation profile not found: {profile_id}"
             )
         return self._profile_index[profile_id]

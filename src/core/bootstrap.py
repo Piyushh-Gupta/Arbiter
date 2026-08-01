@@ -538,6 +538,72 @@ def build_failure_analysis_registry(
     return registry
 
 
+def build_failure_correlation_registry(config: AppConfig) -> Any:
+    """Builds the failure correlation registry and instantiates data-driven rules."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.failure.correlation import DefaultFailureCorrelationStrategy
+    from src.core.failure.failure_models import (
+        FailureCategory,
+        FailureCorrelationDefinition,
+        FailureCorrelationProfile,
+        FailureCorrelationProfileRegistry,
+        FailureCorrelationRule,
+    )
+
+    # 1. Instantiate default correlation rules
+    rule1 = FailureCorrelationRule(
+        rule_id="retrieval_to_verification",
+        source_category=FailureCategory.RETRIEVAL,
+        target_category=FailureCategory.VERIFICATION,
+        precedence=1,
+        enabled=True,
+    )
+    rule2 = FailureCorrelationRule(
+        rule_id="verification_to_calibration",
+        source_category=FailureCategory.VERIFICATION,
+        target_category=FailureCategory.CALIBRATION,
+        precedence=1,
+        enabled=True,
+    )
+    rule3 = FailureCorrelationRule(
+        rule_id="infrastructure_to_verification",
+        source_category=FailureCategory.INFRASTRUCTURE,
+        target_category=FailureCategory.VERIFICATION,
+        precedence=1,
+        enabled=True,
+    )
+
+    rules = (rule1, rule2, rule3)
+
+    # Validate duplicate rule IDs
+    rule_ids = [r.rule_id for r in rules]
+    if len(rule_ids) != len(set(rule_ids)):
+        raise OptimizationConfigurationError(
+            "Duplicate correlation rule IDs detected during bootstrap."
+        )
+
+    # 2. Instantiate strategy
+    strategy = DefaultFailureCorrelationStrategy()
+
+    definition = FailureCorrelationDefinition()
+
+    profile = FailureCorrelationProfile(
+        profile_id="default_failure_correlation",
+        definition=definition,
+        rules=rules,
+        strategy=strategy,
+    )
+
+    try:
+        registry = FailureCorrelationProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Failure correlation registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_calibration_registry(config: AppConfig) -> Any:
     """Builds and validates the calibration profile registry."""
     import math

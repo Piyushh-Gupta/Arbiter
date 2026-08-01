@@ -1,6 +1,10 @@
 """Verification Failure Analysis subsystem (M3.1)."""
 
 from src.core.failure.base import BaseFailureAnalyzer, FailureAggregationStrategy
+from src.core.failure.correlation import (
+    BaseFailureCorrelationStrategy,
+    DefaultFailureCorrelationStrategy,
+)
 from src.core.failure.failure_models import (
     AnalyzerExecutionResult,
     DiagnosticEvidence,
@@ -12,6 +16,13 @@ from src.core.failure.failure_models import (
     FailureArtifactReference,
     FailureCategory,
     FailureClassification,
+    FailureCorrelation,
+    FailureCorrelationContext,
+    FailureCorrelationDefinition,
+    FailureCorrelationProfile,
+    FailureCorrelationProfileRegistry,
+    FailureCorrelationResult,
+    FailureCorrelationRule,
     FailureDiagnostic,
     FailureDiagnosticContext,
     FailureExecutionMetadata,
@@ -57,4 +68,13 @@ __all__ = [
     "InfrastructureFailureAnalyzer",
     "DefaultFailureAggregationStrategy",
     "CompositeFailureAnalyzer",
+    "FailureCorrelationDefinition",
+    "FailureCorrelationRule",
+    "FailureCorrelation",
+    "FailureCorrelationContext",
+    "FailureCorrelationResult",
+    "FailureCorrelationProfile",
+    "FailureCorrelationProfileRegistry",
+    "BaseFailureCorrelationStrategy",
+    "DefaultFailureCorrelationStrategy",
 ]
