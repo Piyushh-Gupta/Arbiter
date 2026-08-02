@@ -827,6 +827,89 @@ def build_failure_explainability_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_failure_optimization_registry(config: AppConfig) -> Any:
+    """Builds the failure optimization profile registry for M3.8."""
+    from src.core.exceptions import OptimizationConfigurationError
+    from src.core.failure.optimization.controller import FailureOptimizationController
+    from src.core.failure.optimization.health import FailureHealthMonitor
+    from src.core.failure.optimization.implementations import (
+        BoundedSemaphoreConcurrencyLimiter,
+        FailureTelemetryCollector,
+    )
+    from src.core.failure.optimization.optimization_models import (
+        FailureOperationalProfile,
+        FailureOptimizationDefinition,
+        FailureOptimizationProfile,
+        FailureOptimizationProfileRegistry,
+    )
+
+    definition = FailureOptimizationDefinition(
+        batch_size=16,
+        max_concurrent_requests=4,
+        timeout_ms=5000.0,
+        telemetry_enabled=True,
+        profiling_enabled=False,
+    )
+
+    limiter = BoundedSemaphoreConcurrencyLimiter(
+        max_concurrent_requests=definition.max_concurrent_requests
+    )
+    collector = FailureTelemetryCollector()
+    _health_monitor = FailureHealthMonitor()
+
+    controller = FailureOptimizationController(
+        definition=definition,
+        concurrency_limiter=limiter,
+        telemetry_collector=collector,
+    )
+
+    try:
+        controller.validate_compatibility(definition)
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Failure optimization controller compatibility validation failed: {e}"
+        ) from e
+
+    op_profile = FailureOperationalProfile(
+        profile_id="default_failure_operational",
+        optimization_definition=definition,
+        timeout_policy=definition.timeout_ms,
+        concurrency_policy=definition.max_concurrent_requests,
+    )
+
+    profile = FailureOptimizationProfile(
+        profile_id="default_failure_optimization",
+        definition=definition,
+        controller=controller,
+        operational_profile=op_profile,
+    )
+
+    try:
+        registry = FailureOptimizationProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise OptimizationConfigurationError(
+            f"Failure optimization registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
+def build_failure_operational_registry(config: AppConfig) -> Any:
+    """Builds the failure operational profile for M3.8."""
+    from src.core.failure.optimization.optimization_models import (
+        FailureOperationalProfile,
+        FailureOptimizationDefinition,
+    )
+
+    definition = FailureOptimizationDefinition()
+    return FailureOperationalProfile(
+        profile_id="default_failure_operational",
+        optimization_definition=definition,
+        timeout_policy=definition.timeout_ms,
+        concurrency_policy=definition.max_concurrent_requests,
+    )
+
+
 def build_calibration_registry(config: AppConfig) -> Any:
     """Builds and validates the calibration profile registry."""
     import math
