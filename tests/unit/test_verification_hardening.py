@@ -1,6 +1,6 @@
 """Unit and integration tests for M2.9 Verification Production Hardening subsystem."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI, status
@@ -57,7 +57,7 @@ def test_verification_operational_trace() -> None:
         readiness_validation=True,
         registry_validation=True,
         operational_configuration={"env": "production"},
-        execution_timestamp=datetime.utcnow().isoformat(),
+        execution_timestamp=datetime.now(UTC).isoformat(),
     )
     assert trace.startup_validation is True
     assert trace.readiness_validation is True
@@ -132,6 +132,6 @@ def test_determinism_operational_no_op() -> None:
         readiness_validation=True,
         registry_validation=True,
         operational_configuration={},
-        execution_timestamp=datetime.utcnow().isoformat(),
+        execution_timestamp=datetime.now(UTC).isoformat(),
     )
     assert trace is not None

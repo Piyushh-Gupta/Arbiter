@@ -1,7 +1,7 @@
 """Concrete verification failure analysis strategies, composite orchestrator, and aggregation logic (M3.3)."""
 
 import warnings
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Sequence, cast
 
 from src.core.exceptions import FailureAnalysisConfigurationError
@@ -39,7 +39,7 @@ class RetrievalFailureAnalyzer(BaseFailureAnalyzer):
             execution_environment="production",
             execution_device="cpu",
             framework="python",
-            execution_timestamp=datetime.utcnow().isoformat(),
+            execution_timestamp=datetime.now(UTC).isoformat(),
         )
 
     def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
@@ -129,7 +129,7 @@ class VerificationFailureAnalyzer(BaseFailureAnalyzer):
             execution_environment="production",
             execution_device="cpu",
             framework="python",
-            execution_timestamp=datetime.utcnow().isoformat(),
+            execution_timestamp=datetime.now(UTC).isoformat(),
         )
 
     def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
@@ -223,7 +223,7 @@ class CalibrationFailureAnalyzer(BaseFailureAnalyzer):
             execution_environment="production",
             execution_device="cpu",
             framework="python",
-            execution_timestamp=datetime.utcnow().isoformat(),
+            execution_timestamp=datetime.now(UTC).isoformat(),
         )
 
     def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
@@ -317,7 +317,7 @@ class InfrastructureFailureAnalyzer(BaseFailureAnalyzer):
             execution_environment="production",
             execution_device="cpu",
             framework="python",
-            execution_timestamp=datetime.utcnow().isoformat(),
+            execution_timestamp=datetime.now(UTC).isoformat(),
         )
 
     def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:
@@ -551,7 +551,7 @@ class CompositeFailureAnalyzer(BaseFailureAnalyzer):
             execution_environment="production",
             execution_device="cpu",
             framework="python",
-            execution_timestamp=datetime.utcnow().isoformat(),
+            execution_timestamp=datetime.now(UTC).isoformat(),
         )
 
     def validate_compatibility(self, definition: FailureAnalysisDefinition) -> None:

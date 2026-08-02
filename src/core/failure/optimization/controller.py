@@ -2,7 +2,7 @@
 
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.core.exceptions import OptimizationConfigurationError, OptimizationTimeoutError
@@ -168,7 +168,7 @@ class FailureOptimizationController:
             if self._telemetry is not None and self._definition.telemetry_enabled:
                 rec = FailureTelemetryRecord(
                     request_id=request_id,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     execution_metrics=metrics,
                     success=success,
                     error_message=error_msg,

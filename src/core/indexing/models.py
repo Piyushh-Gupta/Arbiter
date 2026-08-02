@@ -1,6 +1,6 @@
 """Immutable domain models for the Offline Indexing Framework."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -51,7 +51,7 @@ class ArtifactLocation(BaseModel):
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class EmbeddingModelMetadata(BaseModel):

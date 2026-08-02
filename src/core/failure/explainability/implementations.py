@@ -1,6 +1,6 @@
 """Concrete explanation strategies for Failure Explainability & Reporting subsystem (M3.7)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Sequence
 
 from src.core.exceptions import FailureAnalysisConfigurationError
@@ -110,7 +110,7 @@ class SummaryExplanationStrategy(BaseFailureExplanationStrategy):
             strategy_id="summary_explanation_strategy",
             configuration_fingerprint=compute_explanation_fingerprint(effective_def),
             schema_version="1.0",
-            generation_timestamp=datetime.now(timezone.utc).isoformat(),
+            generation_timestamp=datetime.now(UTC).isoformat(),
         )
 
         return FailureExplanationResult(
@@ -193,7 +193,7 @@ class DecisionTraceExplanationStrategy(BaseFailureExplanationStrategy):
             strategy_id="decision_trace_explanation_strategy",
             configuration_fingerprint=compute_explanation_fingerprint(effective_def),
             schema_version="1.0",
-            generation_timestamp=datetime.now(timezone.utc).isoformat(),
+            generation_timestamp=datetime.now(UTC).isoformat(),
         )
 
         return FailureExplanationResult(
@@ -298,7 +298,7 @@ class CompositeFailureExplanationStrategy(BaseFailureExplanationStrategy):
             strategy_id="composite_failure_explanation_strategy",
             configuration_fingerprint=compute_explanation_fingerprint(effective_def),
             schema_version="1.0",
-            generation_timestamp=datetime.now(timezone.utc).isoformat(),
+            generation_timestamp=datetime.now(UTC).isoformat(),
         )
 
         return FailureExplanationResult(

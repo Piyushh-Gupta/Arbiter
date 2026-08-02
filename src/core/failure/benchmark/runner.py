@@ -1,7 +1,7 @@
 """Stateless FailureBenchmarkRunner orchestrating benchmark suite execution (M3.6)."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.core.failure.benchmark.benchmark_models import (
     FailureBenchmarkDefinition,
@@ -109,7 +109,7 @@ class FailureBenchmarkRunner:
         )
 
         fingerprint = compute_benchmark_fingerprint(definition)
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         return FailureBenchmarkReport(
             result=benchmark_result,

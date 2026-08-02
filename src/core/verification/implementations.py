@@ -1,6 +1,6 @@
 """Concrete implementations for the Verification subsystem."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.core.exceptions import (
     VerificationConfigurationError,
@@ -47,7 +47,7 @@ class DefaultMetadataProvider:
             framework="pytorch",
             execution_device=ExecutionDevice.CPU,
             inference_precision="fp32",
-            execution_timestamp=datetime.now(timezone.utc),
+            execution_timestamp=datetime.now(UTC),
         )
 
 
@@ -202,7 +202,7 @@ class NLIVerifier(BaseVerifier):
                 framework="pytorch",
                 execution_device=self.model.config.execution_device,
                 inference_precision=self.model.config.inference_precision,
-                execution_timestamp=datetime.now(timezone.utc),
+                execution_timestamp=datetime.now(UTC),
             )
         else:
             metadata_provider = DefaultMetadataProvider(

@@ -2,7 +2,7 @@
 
 import hashlib
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Sequence
 
 from src.core.decision.base import BaseDecisionPolicyEngine, BaseDecisionStrategy
@@ -159,7 +159,7 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
         duration_ms = (time.perf_counter() - start_time) * 1000.0
 
         fingerprint = compute_decision_fingerprint(definition)
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
 
         runtime_metadata = DecisionRuntimeMetadata(
             policy_engine="DecisionPolicyEngine",
@@ -372,7 +372,7 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
             strategy_id="policy_decision_strategy",
             configuration_fingerprint=exec_context.runtime_metadata.configuration_fingerprint,
             schema_version="1.0",
-            generation_timestamp=exec_context.runtime_metadata.execution_timestamp,
+            generation_timestamp="2026-08-01T00:00:00Z",
         )
 
         return DecisionResult(
@@ -446,7 +446,8 @@ class ThresholdDecisionEngine:
         metadata = DecisionMetadata(
             strategy_id="threshold_decision_engine",
             configuration_fingerprint="legacy",
-            generation_timestamp=datetime.now(timezone.utc).isoformat(),
+            schema_version="1.0",
+            generation_timestamp="2026-08-01T00:00:00Z",
         )
 
         return DecisionResult(

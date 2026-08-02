@@ -2,7 +2,7 @@
 
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from src.core.exceptions import (
@@ -162,7 +162,7 @@ class VerificationOptimizationController:
                 timeout_ms=timeout_ms,
                 batch_configuration=batch_config,
                 telemetry_configured=self._definition.telemetry_enabled,
-                execution_timestamp=datetime.utcnow().isoformat(),
+                execution_timestamp=datetime.now(UTC).isoformat(),
             )
 
             return explanation_result, metrics, trace
