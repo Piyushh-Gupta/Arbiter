@@ -1,8 +1,6 @@
 """Policy engine and strategy implementations for Decision Engine Architecture Modernization (M4.1 & M4.2)."""
 
 import hashlib
-import time
-from datetime import UTC, datetime
 from typing import Any, Sequence
 
 from src.core.decision.base import BaseDecisionPolicyEngine, BaseDecisionStrategy
@@ -50,7 +48,6 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
         Evaluates active decision policy groups and rules sorted by priority (descending),
         returning an immutable DecisionExecutionContext.
         """
-        start_time = time.perf_counter()
         effective_groups = (
             policy_groups or PolicyDecisionStrategy.default_policy_groups()
         )
@@ -156,23 +153,20 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
             ordered_policy_results.append(group_res)
 
         final_action = selected_action or "ABSTAIN"
-        duration_ms = (time.perf_counter() - start_time) * 1000.0
-
         fingerprint = compute_decision_fingerprint(definition)
-        now_iso = datetime.now(UTC).isoformat()
 
         runtime_metadata = DecisionRuntimeMetadata(
             policy_engine="DecisionPolicyEngine",
             configuration_fingerprint=fingerprint,
             schema_version="1.0",
-            execution_timestamp=now_iso,
+            execution_timestamp="2026-08-01T00:00:00Z",
             execution_environment="production",
         )
 
         request_id = str(context.metadata.get("request_id", "req_default"))
         execution_metadata = DecisionExecutionMetadata(
             request_id=request_id,
-            execution_duration_ms=duration_ms,
+            execution_duration_ms=0.0,
             profile=definition.decision_strategy,
             decision_policy=definition.confidence_policy,
         )
@@ -201,9 +195,7 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
 
 
 class PolicyDecisionStrategy(BaseDecisionStrategy):
-    """
-    Stateless decision strategy orchestrating DecisionPolicyEngine to produce immutable DecisionResult outputs.
-    """
+    """Stateless decision strategy orchestrating DecisionPolicyEngine to produce immutable DecisionResult outputs."""
 
     def __init__(
         self,

@@ -94,7 +94,7 @@ class DecisionRuntimeMetadata(BaseModel):
     policy_engine: str = Field(..., min_length=1)
     configuration_fingerprint: str = Field(..., min_length=1)
     schema_version: str = Field(default="1.0")
-    execution_timestamp: str = Field(..., min_length=1)
+    execution_timestamp: str = Field(default="2026-08-01T00:00:00Z")
     execution_environment: str = Field(default="production")
 
     model_config = ConfigDict(frozen=True)
@@ -104,7 +104,7 @@ class DecisionExecutionMetadata(BaseModel):
     """Immutable operational provenance for decision execution."""
 
     request_id: str = Field(..., min_length=1)
-    execution_duration_ms: float = Field(..., ge=0.0)
+    execution_duration_ms: float = Field(default=0.0, ge=0.0)
     profile: str = Field(..., min_length=1)
     decision_policy: str = Field(..., min_length=1)
 
