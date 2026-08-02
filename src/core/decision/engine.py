@@ -1,8 +1,9 @@
 """Pure delegating orchestrator for decision engines."""
 
-from src.core.decision.base import BaseDecisionEngine
-from src.core.decision.decision_models import DecisionDefinition, DecisionResult
-from src.core.uncertainty.uncertainty_models import UncertaintyResult
+from typing import Any, cast
+
+from src.core.decision.decision_models import DecisionResult
+from src.core.exceptions import DecisionExecutionError
 
 
 class DecisionEngine:
@@ -12,24 +13,16 @@ class DecisionEngine:
 
     def decide(
         self,
-        claim: str,
-        uncertainty_result: UncertaintyResult,
-        definition: DecisionDefinition,
-        strategy: BaseDecisionEngine,
+        claim: Any,
+        uncertainty_result: Any = None,
+        definition: Any = None,
+        strategy: Any = None,
     ) -> DecisionResult:
         """
-        Delegates the decision execution to the provided strategy.
-
-        Note: Compatibility validation is deliberately omitted from this orchestrator,
-        leaving it exactly to profile construction, preserving orchestrator purity.
-
-        Args:
-            claim: The normalized textual assertion.
-            uncertainty_result: The accumulated pipeline state.
-            definition: The assumed-valid configuration parameters.
-            strategy: The concrete, stateless strategy.
-
-        Returns:
-            DecisionResult: The final routing decision.
+        Delegates the decision execution to the provided strategy or engine.
         """
-        return strategy.decide(claim, uncertainty_result, definition)
+        executable = strategy or definition
+        if hasattr(executable, "decide"):
+            res = executable.decide(claim, uncertainty_result, definition)
+            return cast(DecisionResult, res)
+        raise DecisionExecutionError("Invalid strategy provided to DecisionEngine.")

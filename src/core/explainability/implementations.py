@@ -44,11 +44,16 @@ class RuleBasedExplainer:
             sections = []
 
             # 1. Decision Rationale (Verbatim)
+            act_val = (
+                decision_result.action.value
+                if hasattr(decision_result.action, "value")
+                else str(decision_result.action)
+            )
             sections.append(
                 ExplanationSection(
                     identifier="decision_rationale",
                     title="Decision Rationale",
-                    content=f"Action taken: {decision_result.action.value}. {decision_result.rationale}",
+                    content=f"Action taken: {act_val}. {decision_result.rationale}",
                 )
             )
 

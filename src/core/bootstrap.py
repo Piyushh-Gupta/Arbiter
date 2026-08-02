@@ -6,12 +6,7 @@ from typing import Any, Sequence
 
 from src.core.cache.cache_models import RetrievalCacheProfileRegistry
 from src.core.config import Settings
-from src.core.decision.decision_models import (
-    DecisionProfile,
-    DecisionProfileRegistry,
-    ThresholdDecisionDefinition,
-)
-from src.core.decision.implementations import ThresholdDecisionEngine
+from src.core.decision.decision_models import DecisionProfile, DecisionProfileRegistry
 from src.core.evaluation.evaluation_models import (
     EvaluationProfile,
     EvaluationProfileRegistry,
@@ -1053,18 +1048,47 @@ def build_uncertainty_registry(config: AppConfig) -> UncertaintyProfileRegistry:
     return UncertaintyProfileRegistry(profiles=(profile,))
 
 
-def build_decision_registry(config: AppConfig) -> DecisionProfileRegistry:
-    """Builds the decision registry."""
-    engine = ThresholdDecisionEngine()
-    definition = ThresholdDecisionDefinition(
-        accept_max_uncertainty=0.3, reject_max_uncertainty=0.7
+def build_decision_registry(config: AppConfig) -> Any:
+    """Builds the decision registry for M4.1."""
+    from src.core.decision.decision_models import DecisionDefinition
+    from src.core.decision.implementations import (
+        DecisionPolicyEngine,
+        PolicyDecisionStrategy,
     )
+    from src.core.exceptions import DecisionConfigurationError
+
+    definition = DecisionDefinition(
+        decision_strategy="policy",
+        confidence_policy="calibrated",
+        uncertainty_policy="threshold_based",
+        failure_policy="severity_aware",
+        escalation_policy="default",
+    )
+    policy_engine = DecisionPolicyEngine()
+    rules = PolicyDecisionStrategy.default_rules()
+    strategy = PolicyDecisionStrategy(rules=rules, policy_engine=policy_engine)
+
+    try:
+        strategy.validate_compatibility(definition)
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision strategy compatibility validation failed: {e}"
+        ) from e
+
     profile = DecisionProfile(
         profile_id="default_decision",
         definition=definition,
-        engine=engine,
+        strategy=strategy,
     )
-    return DecisionProfileRegistry(profiles=(profile,))
+
+    try:
+        registry = DecisionProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision registry initialization failed: {e}"
+        ) from e
+
+    return registry
 
 
 def build_explanation_registry(

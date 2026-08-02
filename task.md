@@ -1,12 +1,11 @@
-# M3.8 Failure Production Optimization & Hardening - Tasks
+# M4.1 Decision Engine Architecture Modernization - Tasks
 
-- [x] Implement immutable optimization models in `src/core/failure/optimization/optimization_models.py`
-- [x] Implement concurrency limiter and telemetry collector in `src/core/failure/optimization/implementations.py`
-- [x] Implement failure health monitor in `src/core/failure/optimization/health.py`
-- [x] Implement failure optimization controller in `src/core/failure/optimization/controller.py`
-- [x] Create `src/core/failure/optimization/__init__.py`
-- [x] Update `src/core/bootstrap.py` with `build_failure_optimization_registry` and `build_failure_operational_registry`
-- [x] Create unit tests in `tests/unit/test_failure_optimization.py`
+- [x] Implement base protocol in `src/core/decision/base.py`
+- [x] Implement immutable models in `src/core/decision/decision_models.py`
+- [x] Implement policy engine and strategy in `src/core/decision/implementations.py`
+- [x] Create `src/core/decision/__init__.py`
+- [x] Update `src/core/bootstrap.py` with updated `build_decision_registry`
+- [x] Create unit tests in `tests/unit/test_decision_m41.py`
 - [x] Update `.ai/MILESTONE_STATUS.md` and `.ai/DECISION_LOG.md`
 - [x] Run full validation suite (ruff, isort, mypy, pytest with coverage)
 - [x] Execute git workflow (stage, commit, push, check CI status)

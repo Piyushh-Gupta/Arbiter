@@ -123,5 +123,7 @@
 - [x] M3.6 Failure Benchmarking & Evaluation Framework
 - [x] M3.7 Failure Explainability & Reporting
 - [x] M3.8 Failure Production Optimization & Hardening
+- [x] M4.1 Decision Engine Architecture Modernization
+
 
 
