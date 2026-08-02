@@ -767,6 +767,66 @@ def build_failure_benchmark_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_failure_explainability_registry(config: AppConfig) -> Any:
+    """Builds the failure explainability profile registry for M3.7."""
+    from src.core.exceptions import FailureAnalysisConfigurationError
+    from src.core.failure.explainability.explanation_models import (
+        FailureExplanationDefinition,
+        FailureExplanationProfile,
+        FailureExplanationProfileRegistry,
+        FailureExplanationTemplate,
+    )
+    from src.core.failure.explainability.implementations import (
+        CompositeFailureExplanationStrategy,
+        DecisionTraceExplanationStrategy,
+        SummaryExplanationStrategy,
+    )
+    from src.core.failure.explainability.rendering import FailureReportRenderer
+
+    definition = FailureExplanationDefinition(
+        strategy="composite",
+        verbosity="standard",
+        include_root_cause=True,
+        include_correlation=True,
+        include_severity=True,
+        include_benchmark_references=False,
+    )
+
+    _template = FailureExplanationTemplate(
+        template_id="default_template",
+        verbosity="standard",
+    )
+    _renderer = FailureReportRenderer()
+
+    summary_strategy = SummaryExplanationStrategy()
+    trace_strategy = DecisionTraceExplanationStrategy()
+    composite_strategy = CompositeFailureExplanationStrategy(
+        strategies=(summary_strategy, trace_strategy)
+    )
+
+    try:
+        composite_strategy.validate_compatibility(definition)
+    except Exception as e:
+        raise FailureAnalysisConfigurationError(
+            f"Failure explainability strategy compatibility validation failed: {e}"
+        ) from e
+
+    profile = FailureExplanationProfile(
+        profile_id="default_failure_explainability",
+        definition=definition,
+        strategy=composite_strategy,
+    )
+
+    try:
+        registry = FailureExplanationProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise FailureAnalysisConfigurationError(
+            f"Failure explainability registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_calibration_registry(config: AppConfig) -> Any:
     """Builds and validates the calibration profile registry."""
     import math
