@@ -1,9 +1,14 @@
-"""Base protocols for Decision Engine Architecture Modernization (M4.1)."""
+"""Base protocols for Decision Engine Architecture Modernization (M4.1 & M4.2)."""
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, Sequence, runtime_checkable
 
 if TYPE_CHECKING:
-    from src.core.decision.decision_models import DecisionResult
+    from src.core.decision.decision_models import (
+        DecisionExecutionContext,
+        DecisionInput,
+        DecisionPolicyGroup,
+        DecisionResult,
+    )
 
 
 @runtime_checkable
@@ -21,6 +26,23 @@ class BaseDecisionEngine(Protocol):
         definition: Any,
     ) -> Any:
         """Executes decision policy."""
+        ...
+
+
+@runtime_checkable
+class BaseDecisionPolicyEngine(Protocol):
+    """Protocol for stateless evaluation of decision policy groups and rules."""
+
+    def validate_compatibility(self, definition: Any) -> None:
+        """Validates that the provided definition is compatible with this policy engine."""
+        ...
+
+    def evaluate(
+        self,
+        input_data: "DecisionInput",
+        policy_groups: Sequence["DecisionPolicyGroup"] | None = None,
+    ) -> "DecisionExecutionContext":
+        """Evaluates policy groups statelessly and returns immutable DecisionExecutionContext."""
         ...
 
 

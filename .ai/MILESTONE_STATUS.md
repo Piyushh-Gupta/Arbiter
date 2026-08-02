@@ -124,6 +124,8 @@
 - [x] M3.7 Failure Explainability & Reporting
 - [x] M3.8 Failure Production Optimization & Hardening
 - [x] M4.1 Decision Engine Architecture Modernization
+- [x] M4.2 Decision Policies & Immutable Decision Models
+
 
 
 

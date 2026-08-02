@@ -1,16 +1,26 @@
-"""Policy engine and strategy implementations for Decision Engine Architecture Modernization (M4.1)."""
+"""Policy engine and strategy implementations for Decision Engine Architecture Modernization (M4.1 & M4.2)."""
 
+import hashlib
+import time
 from datetime import datetime, timezone
 from typing import Any, Sequence
 
-from src.core.decision.base import BaseDecisionStrategy
+from src.core.decision.base import BaseDecisionPolicyEngine, BaseDecisionStrategy
 from src.core.decision.decision_models import (
     DecisionAction,
     DecisionContext,
     DecisionDefinition,
+    DecisionEngineMetadata,
+    DecisionExecutionContext,
+    DecisionExecutionMetadata,
+    DecisionInput,
     DecisionMetadata,
+    DecisionPolicyGroup,
+    DecisionPolicyResult,
     DecisionResult,
     DecisionRule,
+    DecisionRuleEvaluation,
+    DecisionRuntimeMetadata,
     DecisionTrace,
     ThresholdDecisionDefinition,
     compute_decision_fingerprint,
@@ -18,33 +28,40 @@ from src.core.decision.decision_models import (
 from src.core.exceptions import DecisionConfigurationError
 
 
-class DecisionPolicyEngine:
+class DecisionPolicyEngine(BaseDecisionPolicyEngine):
     """
-    Stateless engine evaluating immutable decision rules according to precedence
-    and generating execution traces.
+    Stateless engine evaluating immutable decision policy groups and rules according to precedence
+    and generating immutable DecisionExecutionContext outputs.
     """
+
+    def validate_compatibility(self, definition: Any) -> None:
+        """Validates that the provided definition is compatible."""
+        if not isinstance(definition, DecisionDefinition):
+            raise DecisionConfigurationError(
+                "Invalid definition type for DecisionPolicyEngine."
+            )
 
     def evaluate(
         self,
-        context: DecisionContext,
-        rules: Sequence[DecisionRule],
-    ) -> tuple[str, DecisionTrace]:
+        input_data: DecisionInput,
+        policy_groups: Sequence[DecisionPolicyGroup] | None = None,
+    ) -> DecisionExecutionContext:
         """
-        Evaluates active decision rules sorted by priority (descending) and returns
-        the selected action and execution trace.
+        Evaluates active decision policy groups and rules sorted by priority (descending),
+        returning an immutable DecisionExecutionContext.
         """
-        active_rules = sorted(
-            [r for r in rules if r.enabled],
-            key=lambda r: r.priority,
+        start_time = time.perf_counter()
+        effective_groups = (
+            policy_groups or PolicyDecisionStrategy.default_policy_groups()
+        )
+        active_groups = sorted(
+            [g for g in effective_groups if g.enabled],
+            key=lambda g: g.priority,
             reverse=True,
         )
 
-        evaluated_rules: list[str] = []
-        rejected_rules: list[str] = []
-        escalation_reasons: list[str] = []
-        policy_path: list[str] = []
-        selected_rule: str | None = None
-        action: str = "ABSTAIN"
+        context = input_data.context
+        definition = input_data.definition
 
         # Extract values from context
         confidence = 0.5
@@ -69,47 +86,118 @@ class DecisionPolicyEngine:
                 context.severity_result, "escalation_required", False
             )
 
-        for rule in active_rules:
-            evaluated_rules.append(rule.rule_id)
-            conds = rule.conditions
-            matched = True
+        ordered_policy_results: list[DecisionPolicyResult] = []
+        ordered_rule_evaluations: list[DecisionRuleEvaluation] = []
+        selected_action: str | None = None
 
-            if "min_confidence" in conds and confidence < conds["min_confidence"]:
-                matched = False
-            if "max_uncertainty" in conds and uncertainty > conds["max_uncertainty"]:
-                matched = False
-            if (
-                "require_escalation" in conds
-                and conds["require_escalation"] != sev_escalation
-            ):
-                matched = False
+        total_rules_evaluated = 0
 
-            if matched:
-                selected_rule = rule.rule_id
-                action = rule.action
-                policy_path.append(f"Matched rule {rule.rule_id} -> {rule.action}")
-                if rule.action == "ESCALATE":
-                    escalation_reasons.append(
-                        f"Rule {rule.rule_id} triggered escalation."
+        for group in active_groups:
+            matched_rules: list[str] = []
+            reasoning: list[str] = []
+            group_action: str | None = None
+            escalation_req = False
+
+            active_rules = sorted(
+                [r for r in group.ordered_rules if r.enabled],
+                key=lambda r: r.priority,
+                reverse=True,
+            )
+
+            for rule in active_rules:
+                total_rules_evaluated += 1
+                conds = rule.conditions
+                matched = True
+
+                if "min_confidence" in conds and confidence < conds["min_confidence"]:
+                    matched = False
+                if (
+                    "max_uncertainty" in conds
+                    and uncertainty > conds["max_uncertainty"]
+                ):
+                    matched = False
+                if (
+                    "require_escalation" in conds
+                    and conds["require_escalation"] != sev_escalation
+                ):
+                    matched = False
+
+                rule_eval = DecisionRuleEvaluation(
+                    rule_id=rule.rule_id,
+                    matched=matched,
+                    confidence_delta=0.0,
+                    uncertainty_delta=0.0,
+                    explanation=f"Rule {rule.rule_id} evaluation matched={matched}.",
+                    priority=rule.priority,
+                )
+                ordered_rule_evaluations.append(rule_eval)
+
+                if matched:
+                    matched_rules.append(rule.rule_id)
+                    reasoning.append(
+                        f"Matched rule {rule.rule_id} in group {group.group_id} -> {rule.action}"
                     )
-                break
-            else:
-                rejected_rules.append(rule.rule_id)
+                    if group_action is None:
+                        group_action = rule.action
+                    if rule.action == "ESCALATE":
+                        escalation_req = True
+                    if selected_action is None:
+                        selected_action = rule.action
 
-        if not selected_rule:
-            policy_path.append("No rule matched; fell back to default ABSTAIN.")
+            group_res = DecisionPolicyResult(
+                group_id=group.group_id,
+                matched_rules=tuple(matched_rules),
+                confidence_delta=0.0,
+                uncertainty_delta=0.0,
+                escalation_requested=escalation_req,
+                selected_action=group_action,
+                reasoning=tuple(reasoning),
+            )
+            ordered_policy_results.append(group_res)
 
-        trace = DecisionTrace(
-            evaluated_rules=tuple(evaluated_rules),
-            rejected_rules=tuple(rejected_rules),
-            selected_rule=selected_rule,
-            confidence_evolution=(confidence,),
-            uncertainty_evolution=(uncertainty,),
-            escalation_reasoning=tuple(escalation_reasons),
-            policy_path=tuple(policy_path),
+        final_action = selected_action or "ABSTAIN"
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+
+        fingerprint = compute_decision_fingerprint(definition)
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        runtime_metadata = DecisionRuntimeMetadata(
+            policy_engine="DecisionPolicyEngine",
+            configuration_fingerprint=fingerprint,
+            schema_version="1.0",
+            execution_timestamp=now_iso,
+            execution_environment="production",
         )
 
-        return action, trace
+        request_id = str(context.metadata.get("request_id", "req_default"))
+        execution_metadata = DecisionExecutionMetadata(
+            request_id=request_id,
+            execution_duration_ms=duration_ms,
+            profile=definition.decision_strategy,
+            decision_policy=definition.confidence_policy,
+        )
+
+        exec_fp = hashlib.sha256(
+            f"{fingerprint}_{len(ordered_rule_evaluations)}_{final_action}".encode()
+        ).hexdigest()
+
+        engine_metadata = DecisionEngineMetadata(
+            engine_version="1.0",
+            policy_engine_version="1.0",
+            evaluated_group_count=len(active_groups),
+            evaluated_rule_count=total_rules_evaluated,
+            configuration_fingerprint=fingerprint,
+            execution_fingerprint=exec_fp,
+        )
+
+        return DecisionExecutionContext(
+            ordered_policy_results=tuple(ordered_policy_results),
+            ordered_rule_evaluations=tuple(ordered_rule_evaluations),
+            runtime_metadata=runtime_metadata,
+            execution_metadata=execution_metadata,
+            engine_metadata=engine_metadata,
+            selected_action=final_action,
+        )
 
 
 class PolicyDecisionStrategy(BaseDecisionStrategy):
@@ -119,11 +207,24 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
 
     def __init__(
         self,
+        policy_groups: Sequence[DecisionPolicyGroup] | None = None,
+        policy_engine: BaseDecisionPolicyEngine | None = None,
         rules: Sequence[DecisionRule] | None = None,
-        policy_engine: DecisionPolicyEngine | None = None,
     ) -> None:
         self.policy_engine = policy_engine or DecisionPolicyEngine()
-        self.rules = tuple(rules) if rules is not None else self.default_rules()
+        if policy_groups is not None:
+            self.policy_groups = tuple(policy_groups)
+        elif rules is not None:
+            self.policy_groups = (
+                DecisionPolicyGroup(
+                    group_id="custom_rules_group",
+                    priority=100,
+                    enabled=True,
+                    ordered_rules=tuple(rules),
+                ),
+            )
+        else:
+            self.policy_groups = self.default_policy_groups()
 
     @staticmethod
     def default_rules() -> tuple[DecisionRule, ...]:
@@ -158,6 +259,30 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
         )
         return (r1, r2, r3, r4)
 
+    @staticmethod
+    def default_policy_groups() -> tuple[DecisionPolicyGroup, ...]:
+        """Provides canonical default decision policy groups."""
+        rules = PolicyDecisionStrategy.default_rules()
+        g1 = DecisionPolicyGroup(
+            group_id="group_escalation",
+            priority=100,
+            enabled=True,
+            ordered_rules=(rules[0],),
+        )
+        g2 = DecisionPolicyGroup(
+            group_id="group_routing",
+            priority=80,
+            enabled=True,
+            ordered_rules=(rules[1], rules[2]),
+        )
+        g3 = DecisionPolicyGroup(
+            group_id="group_fallback",
+            priority=10,
+            enabled=True,
+            ordered_rules=(rules[3],),
+        )
+        return (g1, g2, g3)
+
     def validate_compatibility(self, definition: Any) -> None:
         """Validates that the provided definition is compatible."""
         if not isinstance(definition, DecisionDefinition):
@@ -189,15 +314,53 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
         )
         self.validate_compatibility(effective_def_obj)
 
-        action, trace = self.policy_engine.evaluate(context, self.rules)
+        input_data = DecisionInput(context=context, definition=effective_def_obj)
+        exec_context = self.policy_engine.evaluate(input_data, self.policy_groups)
 
-        confidence = (
-            trace.confidence_evolution[0] if trace.confidence_evolution else 0.5
-        )
-        uncertainty = (
-            trace.uncertainty_evolution[0] if trace.uncertainty_evolution else 0.5
-        )
+        action = exec_context.selected_action
+        confidence = 0.5
+        if context.verification_result and hasattr(
+            context.verification_result, "confidence"
+        ):
+            confidence = getattr(context.verification_result, "confidence", 0.5)
+        elif context.calibration_result and hasattr(
+            context.calibration_result, "calibrated_confidence"
+        ):
+            confidence = getattr(
+                context.calibration_result, "calibrated_confidence", 0.5
+            )
+
+        uncertainty = 1.0 - confidence
         escalation_req = action == "ESCALATE"
+
+        evaluated_rules: list[str] = []
+        rejected_rules: list[str] = []
+        selected_rule: str | None = None
+        policy_path: list[str] = []
+        escalation_reasons: list[str] = []
+
+        for eval_rule in exec_context.ordered_rule_evaluations:
+            evaluated_rules.append(eval_rule.rule_id)
+            if eval_rule.matched:
+                if selected_rule is None:
+                    selected_rule = eval_rule.rule_id
+                policy_path.append(f"Rule {eval_rule.rule_id} matched.")
+            else:
+                rejected_rules.append(eval_rule.rule_id)
+
+        for group_res in exec_context.ordered_policy_results:
+            if group_res.escalation_requested:
+                escalation_reasons.extend(group_res.reasoning)
+
+        trace = DecisionTrace(
+            evaluated_rules=tuple(evaluated_rules),
+            rejected_rules=tuple(rejected_rules),
+            selected_rule=selected_rule,
+            confidence_evolution=(confidence,),
+            uncertainty_evolution=(uncertainty,),
+            escalation_reasoning=tuple(escalation_reasons),
+            policy_path=tuple(policy_path),
+        )
 
         expl_ref = None
         if context.explanation_result and hasattr(
@@ -207,9 +370,9 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
 
         metadata = DecisionMetadata(
             strategy_id="policy_decision_strategy",
-            configuration_fingerprint=compute_decision_fingerprint(effective_def_obj),
+            configuration_fingerprint=exec_context.runtime_metadata.configuration_fingerprint,
             schema_version="1.0",
-            generation_timestamp=datetime.now(timezone.utc).isoformat(),
+            generation_timestamp=exec_context.runtime_metadata.execution_timestamp,
         )
 
         return DecisionResult(

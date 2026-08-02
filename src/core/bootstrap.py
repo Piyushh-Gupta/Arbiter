@@ -1049,7 +1049,7 @@ def build_uncertainty_registry(config: AppConfig) -> UncertaintyProfileRegistry:
 
 
 def build_decision_registry(config: AppConfig) -> Any:
-    """Builds the decision registry for M4.1."""
+    """Builds the decision registry for M4.1 & M4.2."""
     from src.core.decision.decision_models import DecisionDefinition
     from src.core.decision.implementations import (
         DecisionPolicyEngine,
@@ -1064,11 +1064,16 @@ def build_decision_registry(config: AppConfig) -> Any:
         failure_policy="severity_aware",
         escalation_policy="default",
     )
+
     policy_engine = DecisionPolicyEngine()
-    rules = PolicyDecisionStrategy.default_rules()
-    strategy = PolicyDecisionStrategy(rules=rules, policy_engine=policy_engine)
+    policy_groups = PolicyDecisionStrategy.default_policy_groups()
+    strategy = PolicyDecisionStrategy(
+        policy_groups=policy_groups,
+        policy_engine=policy_engine,
+    )
 
     try:
+        policy_engine.validate_compatibility(definition)
         strategy.validate_compatibility(definition)
     except Exception as e:
         raise DecisionConfigurationError(

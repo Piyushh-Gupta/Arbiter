@@ -9,8 +9,10 @@ from src.core.decision import (
     BaseDecisionStrategy,
     DecisionContext,
     DecisionDefinition,
+    DecisionInput,
     DecisionMetadata,
     DecisionPolicyEngine,
+    DecisionPolicyGroup,
     DecisionProfile,
     DecisionProfileRegistry,
     DecisionResult,
@@ -142,6 +144,8 @@ def test_decision_policy_engine_precedence_and_evaluation(
     dummy_context: DecisionContext,
 ) -> None:
     engine = DecisionPolicyEngine()
+    definition = DecisionDefinition()
+    input_data = DecisionInput(context=dummy_context, definition=definition)
 
     r1 = DecisionRule(
         rule_id="r_low_prio",
@@ -150,6 +154,10 @@ def test_decision_policy_engine_precedence_and_evaluation(
         conditions={},
         action="ACCEPT",
     )
+    g1 = DecisionPolicyGroup(
+        group_id="g1", priority=10, enabled=True, ordered_rules=(r1,)
+    )
+
     r2 = DecisionRule(
         rule_id="r_high_prio",
         priority=90,
@@ -157,6 +165,10 @@ def test_decision_policy_engine_precedence_and_evaluation(
         conditions={"require_escalation": True},
         action="ESCALATE",
     )
+    g2 = DecisionPolicyGroup(
+        group_id="g2", priority=90, enabled=True, ordered_rules=(r2,)
+    )
+
     r_disabled = DecisionRule(
         rule_id="r_disabled",
         priority=100,
@@ -164,13 +176,15 @@ def test_decision_policy_engine_precedence_and_evaluation(
         conditions={},
         action="REJECT",
     )
+    g_disabled = DecisionPolicyGroup(
+        group_id="g_disabled", priority=100, enabled=False, ordered_rules=(r_disabled,)
+    )
 
-    action, trace = engine.evaluate(dummy_context, [r1, r2, r_disabled])
+    exec_ctx = engine.evaluate(input_data, policy_groups=(g1, g2, g_disabled))
 
-    assert action == "ESCALATE"
-    assert trace.selected_rule == "r_high_prio"
-    assert "r_disabled" not in trace.evaluated_rules
-    assert trace.evaluated_rules[0] == "r_high_prio"
+    assert exec_ctx.selected_action == "ESCALATE"
+    assert len(exec_ctx.ordered_policy_results) == 2
+    assert exec_ctx.ordered_policy_results[0].group_id == "g2"
 
 
 # --- Strategy Tests ---
