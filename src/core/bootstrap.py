@@ -1049,10 +1049,11 @@ def build_uncertainty_registry(config: AppConfig) -> UncertaintyProfileRegistry:
 
 
 def build_decision_registry(config: AppConfig) -> Any:
-    """Builds the decision registry for M4.1, M4.2, and M4.3."""
+    """Builds the decision registry for M4.1, M4.2, M4.3, and M4.4."""
     from src.core.decision.decision_models import (
         DecisionDefinition,
         DecisionMetricPolicyRegistry,
+        RiskPolicyRegistry,
     )
     from src.core.decision.implementations import (
         DecisionPolicyEngine,
@@ -1060,9 +1061,12 @@ def build_decision_registry(config: AppConfig) -> Any:
     )
     from src.core.decision.policies import (
         CalibratedMetricPolicy,
+        CostBenefitRiskPolicy,
         DecisionMetricResolver,
         EntropyMetricPolicy,
         RawMetricPolicy,
+        RawRiskPolicy,
+        SeverityThresholdRiskPolicy,
     )
     from src.core.exceptions import DecisionConfigurationError
 
@@ -1088,7 +1092,22 @@ def build_decision_registry(config: AppConfig) -> Any:
             f"Decision metric registry initialization failed: {e}"
         ) from e
 
-    policy_engine = DecisionPolicyEngine(metric_resolver=metric_resolver)
+    try:
+        risk_registry = RiskPolicyRegistry(
+            policies=(
+                RawRiskPolicy(),
+                SeverityThresholdRiskPolicy(),
+                CostBenefitRiskPolicy(),
+            )
+        )
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision risk registry initialization failed: {e}"
+        ) from e
+
+    policy_engine = DecisionPolicyEngine(
+        metric_resolver=metric_resolver, risk_policy_registry=risk_registry
+    )
     policy_groups = PolicyDecisionStrategy.default_policy_groups()
     strategy = PolicyDecisionStrategy(
         policy_groups=policy_groups,

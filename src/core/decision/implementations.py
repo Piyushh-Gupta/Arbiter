@@ -32,7 +32,9 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
     and generating immutable DecisionExecutionContext outputs.
     """
 
-    def __init__(self, metric_resolver: Any = None) -> None:
+    def __init__(
+        self, metric_resolver: Any = None, risk_policy_registry: Any = None
+    ) -> None:
         if metric_resolver is None:
             from src.core.decision.decision_models import DecisionMetricPolicyRegistry
             from src.core.decision.policies import (
@@ -52,6 +54,23 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
             metric_resolver = DecisionMetricResolver(registry=registry)
         self.metric_resolver = metric_resolver
 
+        if risk_policy_registry is None:
+            from src.core.decision.decision_models import RiskPolicyRegistry
+            from src.core.decision.policies import (
+                CostBenefitRiskPolicy,
+                RawRiskPolicy,
+                SeverityThresholdRiskPolicy,
+            )
+
+            risk_policy_registry = RiskPolicyRegistry(
+                policies=(
+                    RawRiskPolicy(),
+                    SeverityThresholdRiskPolicy(),
+                    CostBenefitRiskPolicy(),
+                )
+            )
+        self.risk_policy_registry = risk_policy_registry
+
     def validate_compatibility(self, definition: Any) -> None:
         """Validates that the provided definition is compatible."""
         if not isinstance(definition, DecisionDefinition):
@@ -60,6 +79,8 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
             )
         if hasattr(self.metric_resolver, "registry"):
             self.metric_resolver.registry.validate_compatibility(definition)
+        if hasattr(self.risk_policy_registry, "validate_compatibility"):
+            self.risk_policy_registry.validate_compatibility(definition)
 
     def evaluate(
         self,
@@ -82,11 +103,19 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
         context = input_data.context
         definition = input_data.definition
 
-        # Resolve metrics using the metric_resolver
+        # 1. Resolve metrics using the metric_resolver
         metrics = self.metric_resolver.resolve_metrics(context, definition)
-        confidence = metrics.confidence
-        uncertainty = metrics.uncertainty
 
+        # 2. Resolve configured risk policy
+        failure_policy_id = getattr(definition, "failure_policy", "severity_aware")
+        risk_policy = self.risk_policy_registry.resolve(failure_policy_id)
+
+        # 3. Evaluate risk (returning immutable RiskEvaluation containing adjusted values)
+        risk_eval = risk_policy.evaluate_risk(context, metrics, definition)
+        confidence = risk_eval.adjusted_confidence
+        uncertainty = risk_eval.adjusted_uncertainty
+
+        # 4. Escalation Policy: evaluate escalation independently of RiskEvaluation
         sev_escalation = False
         if context.severity_result and hasattr(
             context.severity_result, "escalation_required"
@@ -204,6 +233,7 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
             engine_metadata=engine_metadata,
             selected_action=final_action,
             decision_metrics=metrics,
+            risk_evaluation=risk_eval,
         )
 
 
@@ -326,9 +356,13 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
 
         action = exec_context.selected_action
 
-        # Consume DecisionMetrics from exec_context directly, no direct metric extraction
+        # Consume RiskEvaluation/DecisionMetrics from exec_context directly, no direct metric extraction
+        risk_eval = exec_context.risk_evaluation
         metrics = exec_context.decision_metrics
-        if metrics is not None:
+        if risk_eval is not None:
+            confidence = risk_eval.adjusted_confidence
+            uncertainty = risk_eval.adjusted_uncertainty
+        elif metrics is not None:
             confidence = metrics.confidence
             uncertainty = metrics.uncertainty
         else:

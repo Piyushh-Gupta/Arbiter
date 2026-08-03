@@ -1,10 +1,11 @@
-"""Decision Engine subsystem for Arbiter (M4.1, M4.2, and M4.3)."""
+"""Decision Engine subsystem for Arbiter (M4.1, M4.2, M4.3, and M4.4)."""
 
 from src.core.decision.base import (
     BaseDecisionEngine,
     BaseDecisionMetricPolicy,
     BaseDecisionPolicyEngine,
     BaseDecisionStrategy,
+    BaseRiskPolicy,
 )
 from src.core.decision.decision_models import (
     DecisionAction,
@@ -26,6 +27,9 @@ from src.core.decision.decision_models import (
     DecisionRuleEvaluation,
     DecisionRuntimeMetadata,
     DecisionTrace,
+    RiskEvaluation,
+    RiskPolicyRegistry,
+    RiskTrace,
     ThresholdDecisionDefinition,
     compute_decision_fingerprint,
 )
@@ -37,9 +41,12 @@ from src.core.decision.implementations import (
 )
 from src.core.decision.policies import (
     CalibratedMetricPolicy,
+    CostBenefitRiskPolicy,
     DecisionMetricResolver,
     EntropyMetricPolicy,
     RawMetricPolicy,
+    RawRiskPolicy,
+    SeverityThresholdRiskPolicy,
 )
 
 __all__ = [
@@ -47,6 +54,7 @@ __all__ = [
     "BaseDecisionMetricPolicy",
     "BaseDecisionPolicyEngine",
     "BaseDecisionStrategy",
+    "BaseRiskPolicy",
     "DecisionAction",
     "DecisionContext",
     "DecisionDefinition",
@@ -68,6 +76,9 @@ __all__ = [
     "DecisionRuleEvaluation",
     "DecisionRuntimeMetadata",
     "DecisionTrace",
+    "RiskEvaluation",
+    "RiskPolicyRegistry",
+    "RiskTrace",
     "PolicyDecisionStrategy",
     "ThresholdDecisionDefinition",
     "ThresholdDecisionEngine",
@@ -76,4 +87,7 @@ __all__ = [
     "RawMetricPolicy",
     "EntropyMetricPolicy",
     "DecisionMetricResolver",
+    "RawRiskPolicy",
+    "SeverityThresholdRiskPolicy",
+    "CostBenefitRiskPolicy",
 ]

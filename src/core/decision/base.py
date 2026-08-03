@@ -11,6 +11,7 @@ if TYPE_CHECKING:
         DecisionMetrics,
         DecisionPolicyGroup,
         DecisionResult,
+        RiskEvaluation,
     )
 
 
@@ -31,6 +32,29 @@ class BaseDecisionMetricPolicy(Protocol):
         self, context: "DecisionContext", definition: "DecisionDefinition"
     ) -> "DecisionMetrics":
         """Computes or resolves confidence and uncertainty metrics from context."""
+        ...
+
+
+@runtime_checkable
+class BaseRiskPolicy(Protocol):
+    """Protocol for pluggable decision risk policies."""
+
+    @property
+    def policy_id(self) -> str:
+        """Unique identifier for the risk policy."""
+        ...
+
+    def validate_compatibility(self, definition: "DecisionDefinition") -> None:
+        """Validates compatibility with the provided decision configuration."""
+        ...
+
+    def evaluate_risk(
+        self,
+        context: "DecisionContext",
+        metrics: "DecisionMetrics",
+        definition: "DecisionDefinition",
+    ) -> "RiskEvaluation":
+        """Evaluates operational risk score, adjusted confidence/uncertainty, and traces."""
         ...
 
 

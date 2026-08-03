@@ -162,6 +162,7 @@ class DecisionExecutionContext(BaseModel):
     engine_metadata: DecisionEngineMetadata = Field(...)
     selected_action: str = Field(default="ABSTAIN")
     decision_metrics: Any = Field(default=None)
+    risk_evaluation: Any = Field(default=None)
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
@@ -285,6 +286,78 @@ class DecisionMetricPolicyRegistry(BaseModel):
             unc_policy = self._policy_index[unc_policy_id]
             if hasattr(unc_policy, "validate_compatibility"):
                 unc_policy.validate_compatibility(definition)
+
+
+class RiskTrace(BaseModel):
+    """Immutable trace documenting a specific risk factor adjustment."""
+
+    factor_id: str = Field(..., min_length=1)
+    adjustment_reason: str = Field(..., min_length=1)
+    confidence_delta: float = Field(default=0.0)
+    uncertainty_delta: float = Field(default=0.0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RiskEvaluation(BaseModel):
+    """Immutable collection of evaluated risk metrics, contributing factors, and adjustment traces."""
+
+    risk_score: float = Field(..., ge=0.0, le=1.0)
+    adjusted_confidence: float = Field(..., ge=0.0, le=1.0)
+    adjusted_uncertainty: float = Field(..., ge=0.0, le=1.0)
+    applied_policy_id: str = Field(..., min_length=1)
+    contributing_factors: tuple[str, ...] = Field(default_factory=tuple)
+    risk_traces: tuple[RiskTrace, ...] = Field(default_factory=tuple)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RiskPolicyRegistry(BaseModel):
+    """O(1) registry resolver for pluggable risk policies."""
+
+    policies: tuple[Any, ...] = Field(..., min_length=1)
+
+    _policy_index: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "RiskPolicyRegistry":
+        from src.core.exceptions import DuplicateDecisionRiskPolicyError
+
+        index: dict[str, Any] = {}
+        for p in self.policies:
+            policy_id = p.policy_id
+            if policy_id in index:
+                raise DuplicateDecisionRiskPolicyError(
+                    f"Duplicate risk policy ID detected: {policy_id}"
+                )
+            index[policy_id] = p
+        object.__setattr__(self, "_policy_index", index)
+        return self
+
+    def resolve(self, policy_id: str) -> Any:
+        from src.core.exceptions import DecisionRiskPolicyNotFoundError
+
+        if policy_id not in self._policy_index:
+            raise DecisionRiskPolicyNotFoundError(
+                f"Decision risk policy not found: {policy_id}"
+            )
+        return self._policy_index[policy_id]
+
+    def validate_compatibility(self, definition: Any) -> None:
+        """Validates that the failure_policy specified in the definition exists and is compatible."""
+        failure_policy_id = getattr(definition, "failure_policy", "severity_aware")
+        from src.core.exceptions import DecisionRiskPolicyNotFoundError
+
+        if failure_policy_id not in self._policy_index:
+            raise DecisionRiskPolicyNotFoundError(
+                f"Risk policy '{failure_policy_id}' not found in registry."
+            )
+        policy = self._policy_index[failure_policy_id]
+        if hasattr(policy, "validate_compatibility"):
+            policy.validate_compatibility(definition)
 
 
 class DecisionProfile(BaseModel):

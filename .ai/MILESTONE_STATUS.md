@@ -126,6 +126,7 @@
 - [x] M4.1 Decision Engine Architecture Modernization
 - [x] M4.2 Decision Policies & Immutable Decision Models
 - [x] M4.3 Threshold & Confidence Policies
+- [x] M4.4 Risk & Failure-Aware Decision Engine
 
 
 
