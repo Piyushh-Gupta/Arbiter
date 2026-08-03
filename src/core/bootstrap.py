@@ -1590,7 +1590,10 @@ def build_pipeline_profile_registry(
         UncertaintyStage,
         VerificationStage,
     )
-    from src.core.pipeline.pipeline_models import PipelineDefinition, PipelineStageDefinition
+    from src.core.pipeline.pipeline_models import (
+        PipelineDefinition,
+        PipelineStageDefinition,
+    )
     from src.core.pipeline.profile_models import (
         PipelineProfile,
         PipelineProfileRegistry,
@@ -1598,45 +1601,67 @@ def build_pipeline_profile_registry(
         PipelineStageRegistry,
     )
 
-    # Construct Stage Profiles
+    # Construct Stage Profiles — profile_ids must match what each subsystem registry registers
     ret_stage = PipelineStageProfile(
-        profile_id="stage_retrieval_default",
-        definition=PipelineStageDefinition(stage_id="stage_1", profile_id="default_retrieval"),
+        profile_id="bm25_retrieval",
+        definition=PipelineStageDefinition(
+            stage_id="stage_1", profile_id="bm25_retrieval"
+        ),
         stage=RetrievalStage(registry=retrieval_registry),
     )
     ver_stage = PipelineStageProfile(
-        profile_id="stage_verification_default",
-        definition=PipelineStageDefinition(stage_id="stage_2", profile_id="default_verification"),
+        profile_id="default_verification",
+        definition=PipelineStageDefinition(
+            stage_id="stage_2", profile_id="default_verification"
+        ),
         stage=VerificationStage(registry=verification_registry),
     )
     fa_stage = PipelineStageProfile(
-        profile_id="stage_failure_analysis_default",
-        definition=PipelineStageDefinition(stage_id="stage_3", profile_id="default_failure_analysis"),
+        profile_id="default_failure_analysis",
+        definition=PipelineStageDefinition(
+            stage_id="stage_3", profile_id="default_failure_analysis"
+        ),
         stage=FailureAnalysisStage(registry=failure_analysis_registry),
     )
     unc_stage = PipelineStageProfile(
-        profile_id="stage_uncertainty_default",
-        definition=PipelineStageDefinition(stage_id="stage_4", profile_id="default_uncertainty"),
+        profile_id="default_uncertainty",
+        definition=PipelineStageDefinition(
+            stage_id="stage_4", profile_id="default_uncertainty"
+        ),
         stage=UncertaintyStage(registry=uncertainty_registry),
     )
     dec_stage = PipelineStageProfile(
-        profile_id="stage_decision_default",
-        definition=PipelineStageDefinition(stage_id="stage_5", profile_id="default_decision"),
+        profile_id="default_decision",
+        definition=PipelineStageDefinition(
+            stage_id="stage_5", profile_id="default_decision"
+        ),
         stage=DecisionStage(registry=decision_registry),
     )
     exp_stage = PipelineStageProfile(
-        profile_id="stage_explanation_default",
-        definition=PipelineStageDefinition(stage_id="stage_6", profile_id="default_explanation"),
+        profile_id="default_explanation",
+        definition=PipelineStageDefinition(
+            stage_id="stage_6", profile_id="default_explanation"
+        ),
         stage=ExplanationStage(registry=explanation_registry),
     )
     eval_stage = PipelineStageProfile(
-        profile_id="stage_evaluation_default",
-        definition=PipelineStageDefinition(stage_id="stage_7", profile_id="default_evaluation"),
+        profile_id="default_evaluation",
+        definition=PipelineStageDefinition(
+            stage_id="stage_7", profile_id="default_evaluation"
+        ),
         stage=EvaluationStage(registry=evaluation_registry),
     )
 
     stage_registry = PipelineStageRegistry(
-        profiles=(ret_stage, ver_stage, fa_stage, unc_stage, dec_stage, exp_stage, eval_stage)
+        profiles=(
+            ret_stage,
+            ver_stage,
+            fa_stage,
+            unc_stage,
+            dec_stage,
+            exp_stage,
+            eval_stage,
+        )
     )
 
     definition = PipelineDefinition(
@@ -1662,10 +1687,10 @@ def build_pipeline_profile_registry(
 
     # Create registry
     pipeline_registry = PipelineProfileRegistry(profiles=(profile,))
-    
+
     # Set registry on orchestrator to complete the cycle
     orchestrator.set_pipeline_registry(pipeline_registry)
-    
+
     return pipeline_registry
 
 
@@ -1673,7 +1698,7 @@ def build_pipeline(config: AppConfig) -> ArbiterPipeline:
     """Builds the full Arbiter Pipeline."""
     ver_reg = build_verification_registry(config)
     cal_reg = build_calibration_registry(config)
-    
+
     retrieval_registry = build_retrieval_registry(config)
     verification_registry = ver_reg
     failure_analysis_registry = build_failure_analysis_registry(config)
@@ -1681,7 +1706,7 @@ def build_pipeline(config: AppConfig) -> ArbiterPipeline:
     decision_registry = build_decision_registry(config)
     explanation_registry = build_explanation_registry(config, ver_reg, cal_reg)
     evaluation_registry = build_evaluation_registry(config)
-    
+
     pipeline_registry = build_pipeline_profile_registry(
         config=config,
         retrieval_registry=retrieval_registry,
@@ -1692,9 +1717,9 @@ def build_pipeline(config: AppConfig) -> ArbiterPipeline:
         explanation_registry=explanation_registry,
         evaluation_registry=evaluation_registry,
     )
-    
+
     modern_pipeline = pipeline_registry.resolve("default_pipeline").orchestrator
-    
+
     return ArbiterPipeline(
         retrieval_registry=retrieval_registry,
         verification_registry=verification_registry,

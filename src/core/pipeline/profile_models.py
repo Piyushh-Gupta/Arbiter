@@ -8,7 +8,10 @@ from src.core.exceptions import (
     PipelineProfileNotFoundError,
 )
 from src.core.pipeline.base import BasePipelineOrchestrator, BasePipelineStage
-from src.core.pipeline.pipeline_models import PipelineDefinition, PipelineStageDefinition
+from src.core.pipeline.pipeline_models import (
+    PipelineDefinition,
+    PipelineStageDefinition,
+)
 
 
 class PipelineStageProfile(BaseModel):
@@ -99,5 +102,7 @@ class PipelineProfileRegistry(BaseModel):
 
     def resolve(self, profile_id: str) -> PipelineProfile:
         if profile_id not in self._profile_index:
-            raise PipelineProfileNotFoundError(f"Pipeline profile {profile_id} not found.")
+            raise PipelineProfileNotFoundError(
+                f"Pipeline profile {profile_id} not found."
+            )
         return self._profile_index[profile_id]

@@ -21,10 +21,6 @@ from src.core.evaluation.evaluation_models import (
     EvaluationProfileRegistry,
     EvaluationResult,
 )
-from src.core.exceptions import (
-    DecisionProfileNotFoundError,
-    VerificationProfileNotFoundError,
-)
 from src.core.explainability.base import BaseExplainer
 from src.core.explainability.explainability_models import (
     ExplanationDefinition,
@@ -304,38 +300,87 @@ def test_immutable_request() -> None:
 
 def test_pipeline_execution_equivalence_and_identity() -> None:
     regs = build_valid_registries()
-    
-    from src.core.pipeline.profile_models import PipelineStageProfile, PipelineStageRegistry, PipelineProfile, PipelineProfileRegistry
-    from src.core.pipeline.pipeline_models import PipelineStageDefinition, PipelineDefinition
-    from src.core.pipeline.orchestrator import RetrievalStage, VerificationStage, FailureAnalysisStage, UncertaintyStage, DecisionStage, ExplanationStage, EvaluationStage, ModernArbiterPipeline
-    
-    stage_reg = PipelineStageRegistry(profiles=(
-        PipelineStageProfile(profile_id="p_ret", definition=PipelineStageDefinition(stage_id="s1", profile_id="p_ret"), stage=RetrievalStage(regs[0])),
-        PipelineStageProfile(profile_id="p_ver", definition=PipelineStageDefinition(stage_id="s2", profile_id="p_ver"), stage=VerificationStage(regs[1])),
-        PipelineStageProfile(profile_id="p_fa", definition=PipelineStageDefinition(stage_id="s3", profile_id="p_fa"), stage=FailureAnalysisStage(regs[2])),
-        PipelineStageProfile(profile_id="p_unc", definition=PipelineStageDefinition(stage_id="s4", profile_id="p_unc"), stage=UncertaintyStage(regs[3])),
-        PipelineStageProfile(profile_id="p_dec", definition=PipelineStageDefinition(stage_id="s5", profile_id="p_dec"), stage=DecisionStage(regs[4])),
-        PipelineStageProfile(profile_id="p_exp", definition=PipelineStageDefinition(stage_id="s6", profile_id="p_exp"), stage=ExplanationStage(regs[5])),
-        PipelineStageProfile(profile_id="p_eval", definition=PipelineStageDefinition(stage_id="s7", profile_id="p_eval"), stage=EvaluationStage(regs[6])),
-    ))
-    
-    modern = ModernArbiterPipeline(stage_registry=stage_reg)
-    pipeline_reg = PipelineProfileRegistry(profiles=(
-        PipelineProfile(
-            profile_id="default_pipeline",
-            definition=PipelineDefinition(
-                pipeline_id="def_1",
-                retrieval_stage=stage_reg.resolve("p_ret").definition,
-                verification_stage=stage_reg.resolve("p_ver").definition,
-                failure_analysis_stage=stage_reg.resolve("p_fa").definition,
-                uncertainty_stage=stage_reg.resolve("p_unc").definition,
-                decision_stage=stage_reg.resolve("p_dec").definition,
-                explanation_stage=stage_reg.resolve("p_exp").definition,
-                evaluation_stage=stage_reg.resolve("p_eval").definition,
+
+    from src.core.pipeline.orchestrator import (
+        DecisionStage,
+        EvaluationStage,
+        ExplanationStage,
+        FailureAnalysisStage,
+        ModernArbiterPipeline,
+        RetrievalStage,
+        UncertaintyStage,
+        VerificationStage,
+    )
+    from src.core.pipeline.pipeline_models import (
+        PipelineDefinition,
+        PipelineStageDefinition,
+    )
+    from src.core.pipeline.profile_models import (
+        PipelineProfile,
+        PipelineProfileRegistry,
+        PipelineStageProfile,
+        PipelineStageRegistry,
+    )
+
+    stage_reg = PipelineStageRegistry(
+        profiles=(
+            PipelineStageProfile(
+                profile_id="p_ret",
+                definition=PipelineStageDefinition(stage_id="s1", profile_id="p_ret"),
+                stage=RetrievalStage(regs[0]),
             ),
-            orchestrator=modern,
-        ),
-    ))
+            PipelineStageProfile(
+                profile_id="p_ver",
+                definition=PipelineStageDefinition(stage_id="s2", profile_id="p_ver"),
+                stage=VerificationStage(regs[1]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_fa",
+                definition=PipelineStageDefinition(stage_id="s3", profile_id="p_fa"),
+                stage=FailureAnalysisStage(regs[2]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_unc",
+                definition=PipelineStageDefinition(stage_id="s4", profile_id="p_unc"),
+                stage=UncertaintyStage(regs[3]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_dec",
+                definition=PipelineStageDefinition(stage_id="s5", profile_id="p_dec"),
+                stage=DecisionStage(regs[4]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_exp",
+                definition=PipelineStageDefinition(stage_id="s6", profile_id="p_exp"),
+                stage=ExplanationStage(regs[5]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_eval",
+                definition=PipelineStageDefinition(stage_id="s7", profile_id="p_eval"),
+                stage=EvaluationStage(regs[6]),
+            ),
+        )
+    )
+
+    modern = ModernArbiterPipeline(stage_registry=stage_reg)
+    pipeline_reg = PipelineProfileRegistry(
+        profiles=(
+            PipelineProfile(
+                profile_id="default_pipeline",
+                definition=PipelineDefinition(
+                    pipeline_id="def_1",
+                    retrieval_stage=stage_reg.resolve("p_ret").definition,
+                    verification_stage=stage_reg.resolve("p_ver").definition,
+                    failure_analysis_stage=stage_reg.resolve("p_fa").definition,
+                    uncertainty_stage=stage_reg.resolve("p_unc").definition,
+                    decision_stage=stage_reg.resolve("p_dec").definition,
+                    explanation_stage=stage_reg.resolve("p_exp").definition,
+                    evaluation_stage=stage_reg.resolve("p_eval").definition,
+                ),
+                orchestrator=modern,
+            ),
+        )
+    )
     modern.set_pipeline_registry(pipeline_reg)
     pipeline = ArbiterPipeline(modern_pipeline=modern)
 
@@ -375,38 +420,87 @@ def test_pipeline_execution_equivalence_and_identity() -> None:
 
 def test_jit_unknown_profile_failure() -> None:
     regs = build_valid_registries()
-    
-    from src.core.pipeline.profile_models import PipelineStageProfile, PipelineStageRegistry, PipelineProfile, PipelineProfileRegistry
-    from src.core.pipeline.pipeline_models import PipelineStageDefinition, PipelineDefinition
-    from src.core.pipeline.orchestrator import RetrievalStage, VerificationStage, FailureAnalysisStage, UncertaintyStage, DecisionStage, ExplanationStage, EvaluationStage, ModernArbiterPipeline
-    
-    stage_reg = PipelineStageRegistry(profiles=(
-        PipelineStageProfile(profile_id="p_ret", definition=PipelineStageDefinition(stage_id="s1", profile_id="p_ret"), stage=RetrievalStage(regs[0])),
-        PipelineStageProfile(profile_id="p_ver", definition=PipelineStageDefinition(stage_id="s2", profile_id="p_ver"), stage=VerificationStage(regs[1])),
-        PipelineStageProfile(profile_id="p_fa", definition=PipelineStageDefinition(stage_id="s3", profile_id="p_fa"), stage=FailureAnalysisStage(regs[2])),
-        PipelineStageProfile(profile_id="p_unc", definition=PipelineStageDefinition(stage_id="s4", profile_id="p_unc"), stage=UncertaintyStage(regs[3])),
-        PipelineStageProfile(profile_id="p_dec", definition=PipelineStageDefinition(stage_id="s5", profile_id="p_dec"), stage=DecisionStage(regs[4])),
-        PipelineStageProfile(profile_id="p_exp", definition=PipelineStageDefinition(stage_id="s6", profile_id="p_exp"), stage=ExplanationStage(regs[5])),
-        PipelineStageProfile(profile_id="p_eval", definition=PipelineStageDefinition(stage_id="s7", profile_id="p_eval"), stage=EvaluationStage(regs[6])),
-    ))
-    
-    modern = ModernArbiterPipeline(stage_registry=stage_reg)
-    pipeline_reg = PipelineProfileRegistry(profiles=(
-        PipelineProfile(
-            profile_id="default_pipeline",
-            definition=PipelineDefinition(
-                pipeline_id="def_1",
-                retrieval_stage=stage_reg.resolve("p_ret").definition,
-                verification_stage=stage_reg.resolve("p_ver").definition,
-                failure_analysis_stage=stage_reg.resolve("p_fa").definition,
-                uncertainty_stage=stage_reg.resolve("p_unc").definition,
-                decision_stage=stage_reg.resolve("p_dec").definition,
-                explanation_stage=stage_reg.resolve("p_exp").definition,
-                evaluation_stage=stage_reg.resolve("p_eval").definition,
+
+    from src.core.pipeline.orchestrator import (
+        DecisionStage,
+        EvaluationStage,
+        ExplanationStage,
+        FailureAnalysisStage,
+        ModernArbiterPipeline,
+        RetrievalStage,
+        UncertaintyStage,
+        VerificationStage,
+    )
+    from src.core.pipeline.pipeline_models import (
+        PipelineDefinition,
+        PipelineStageDefinition,
+    )
+    from src.core.pipeline.profile_models import (
+        PipelineProfile,
+        PipelineProfileRegistry,
+        PipelineStageProfile,
+        PipelineStageRegistry,
+    )
+
+    stage_reg = PipelineStageRegistry(
+        profiles=(
+            PipelineStageProfile(
+                profile_id="p_ret",
+                definition=PipelineStageDefinition(stage_id="s1", profile_id="p_ret"),
+                stage=RetrievalStage(regs[0]),
             ),
-            orchestrator=modern,
-        ),
-    ))
+            PipelineStageProfile(
+                profile_id="p_ver",
+                definition=PipelineStageDefinition(stage_id="s2", profile_id="p_ver"),
+                stage=VerificationStage(regs[1]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_fa",
+                definition=PipelineStageDefinition(stage_id="s3", profile_id="p_fa"),
+                stage=FailureAnalysisStage(regs[2]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_unc",
+                definition=PipelineStageDefinition(stage_id="s4", profile_id="p_unc"),
+                stage=UncertaintyStage(regs[3]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_dec",
+                definition=PipelineStageDefinition(stage_id="s5", profile_id="p_dec"),
+                stage=DecisionStage(regs[4]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_exp",
+                definition=PipelineStageDefinition(stage_id="s6", profile_id="p_exp"),
+                stage=ExplanationStage(regs[5]),
+            ),
+            PipelineStageProfile(
+                profile_id="p_eval",
+                definition=PipelineStageDefinition(stage_id="s7", profile_id="p_eval"),
+                stage=EvaluationStage(regs[6]),
+            ),
+        )
+    )
+
+    modern = ModernArbiterPipeline(stage_registry=stage_reg)
+    pipeline_reg = PipelineProfileRegistry(
+        profiles=(
+            PipelineProfile(
+                profile_id="default_pipeline",
+                definition=PipelineDefinition(
+                    pipeline_id="def_1",
+                    retrieval_stage=stage_reg.resolve("p_ret").definition,
+                    verification_stage=stage_reg.resolve("p_ver").definition,
+                    failure_analysis_stage=stage_reg.resolve("p_fa").definition,
+                    uncertainty_stage=stage_reg.resolve("p_unc").definition,
+                    decision_stage=stage_reg.resolve("p_dec").definition,
+                    explanation_stage=stage_reg.resolve("p_exp").definition,
+                    evaluation_stage=stage_reg.resolve("p_eval").definition,
+                ),
+                orchestrator=modern,
+            ),
+        )
+    )
     modern.set_pipeline_registry(pipeline_reg)
     pipeline = ArbiterPipeline(modern_pipeline=modern)
 
@@ -417,6 +511,7 @@ def test_jit_unknown_profile_failure() -> None:
     )
 
     from src.core.exceptions import PipelineProfileNotFoundError
+
     with pytest.raises(
         PipelineProfileNotFoundError,
         match="Pipeline profile invalid_pipeline not found",

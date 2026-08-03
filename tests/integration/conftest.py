@@ -18,13 +18,7 @@ def valid_http_request_payload() -> dict[str, str]:
     """Provides a valid EvaluateClaimRequest payload as a dictionary."""
     return {
         "claim": "The quick brown fox jumps over the lazy dog.",
-        "retrieval_profile_id": "bm25_retrieval",
-        "verification_profile_id": "default_verification",
-        "failure_analysis_profile_id": "default_failure_analysis",
-        "uncertainty_profile_id": "default_uncertainty",
-        "decision_profile_id": "default_decision",
-        "explanation_profile_id": "default_explanation",
-        "evaluation_profile_id": "default_evaluation",
+        "pipeline_profile_id": "default_pipeline",
     }
 
 

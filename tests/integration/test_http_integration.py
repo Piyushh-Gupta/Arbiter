@@ -69,13 +69,7 @@ def test_invalid_request_validation(app: FastAPI) -> None:
         # Empty claim
         empty_claim_payload = {
             "claim": "",
-            "retrieval_profile_id": "bm25_retrieval",
-            "verification_profile_id": "default_verification",
-            "failure_analysis_profile_id": "default_failure_analysis",
-            "uncertainty_profile_id": "default_uncertainty",
-            "decision_profile_id": "default_decision",
-            "explanation_profile_id": "default_explanation",
-            "evaluation_profile_id": "default_evaluation",
+            "pipeline_profile_id": "default_pipeline",
         }
         response_empty = client.post("/v1/evaluate", json=empty_claim_payload)
         assert response_empty.status_code == 422
@@ -89,9 +83,9 @@ def test_exception_translation(
     bubble up and translate into sanitized HTTP 400 responses.
     """
     with TestClient(app) as client:
-        # Mutate the payload to request an unknown profile
+        # Mutate the payload to request an unknown pipeline profile
         payload = dict(valid_http_request_payload)
-        payload["retrieval_profile_id"] = "non_existent_profile"
+        payload["pipeline_profile_id"] = "non_existent_profile"
 
         response = client.post("/v1/evaluate", json=payload)
         assert response.status_code == 400

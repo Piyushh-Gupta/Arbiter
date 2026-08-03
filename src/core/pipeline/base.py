@@ -2,7 +2,12 @@
 
 from typing import Any, Protocol, runtime_checkable
 
-from src.core.pipeline.pipeline_models import PipelineDefinition, PipelineExecutionRequest, PipelineExecutionResult, PipelineStageDefinition
+from src.core.pipeline.pipeline_models import (
+    PipelineDefinition,
+    PipelineExecutionRequest,
+    PipelineExecutionResult,
+    PipelineStageDefinition,
+)
 
 
 @runtime_checkable

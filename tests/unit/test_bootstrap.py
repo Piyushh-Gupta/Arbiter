@@ -68,5 +68,4 @@ def test_build_evaluation_registry(config: Settings) -> None:
 def test_build_pipeline(config: Settings) -> None:
     pipeline = build_pipeline(config)
     assert isinstance(pipeline, ArbiterPipeline)
-    assert pipeline._retrieval_registry is not None
-    assert pipeline._evaluation_registry is not None
+    assert pipeline.modern_pipeline is not None
