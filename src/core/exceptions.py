@@ -517,3 +517,19 @@ class DuplicateEvaluationProfileError(ArbiterError):
 
 class EvaluationProfileNotFoundError(ArbiterError):
     """Raised when an evaluation profile cannot be resolved from the registry."""
+
+
+class PipelineConfigurationError(ArbiterError):
+    """Raised when a PipelineDefinition or PipelineProfile contains invalid configuration."""
+
+
+class PipelineStageExecutionError(ArbiterError):
+    """Raised when a pipeline stage encounters a non-recoverable execution failure."""
+
+
+class DuplicatePipelineProfileError(ArbiterError):
+    """Raised when duplicate profile_id values are registered."""
+
+
+class PipelineProfileNotFoundError(ArbiterError):
+    """Raised when a PipelineProfile cannot be resolved from the registry."""

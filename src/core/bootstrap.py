@@ -1569,18 +1569,141 @@ def build_evaluation_registry(config: AppConfig) -> EvaluationProfileRegistry:
     return EvaluationProfileRegistry(profiles=(profile,))
 
 
+def build_pipeline_profile_registry(
+    config: AppConfig,
+    retrieval_registry: Any,
+    verification_registry: Any,
+    failure_analysis_registry: Any,
+    uncertainty_registry: Any,
+    decision_registry: Any,
+    explanation_registry: Any,
+    evaluation_registry: Any,
+) -> Any:
+    """Builds and validates the Pipeline profile registry."""
+    from src.core.pipeline.orchestrator import (
+        DecisionStage,
+        EvaluationStage,
+        ExplanationStage,
+        FailureAnalysisStage,
+        ModernArbiterPipeline,
+        RetrievalStage,
+        UncertaintyStage,
+        VerificationStage,
+    )
+    from src.core.pipeline.pipeline_models import PipelineDefinition, PipelineStageDefinition
+    from src.core.pipeline.profile_models import (
+        PipelineProfile,
+        PipelineProfileRegistry,
+        PipelineStageProfile,
+        PipelineStageRegistry,
+    )
+
+    # Construct Stage Profiles
+    ret_stage = PipelineStageProfile(
+        profile_id="stage_retrieval_default",
+        definition=PipelineStageDefinition(stage_id="stage_1", profile_id="default_retrieval"),
+        stage=RetrievalStage(registry=retrieval_registry),
+    )
+    ver_stage = PipelineStageProfile(
+        profile_id="stage_verification_default",
+        definition=PipelineStageDefinition(stage_id="stage_2", profile_id="default_verification"),
+        stage=VerificationStage(registry=verification_registry),
+    )
+    fa_stage = PipelineStageProfile(
+        profile_id="stage_failure_analysis_default",
+        definition=PipelineStageDefinition(stage_id="stage_3", profile_id="default_failure_analysis"),
+        stage=FailureAnalysisStage(registry=failure_analysis_registry),
+    )
+    unc_stage = PipelineStageProfile(
+        profile_id="stage_uncertainty_default",
+        definition=PipelineStageDefinition(stage_id="stage_4", profile_id="default_uncertainty"),
+        stage=UncertaintyStage(registry=uncertainty_registry),
+    )
+    dec_stage = PipelineStageProfile(
+        profile_id="stage_decision_default",
+        definition=PipelineStageDefinition(stage_id="stage_5", profile_id="default_decision"),
+        stage=DecisionStage(registry=decision_registry),
+    )
+    exp_stage = PipelineStageProfile(
+        profile_id="stage_explanation_default",
+        definition=PipelineStageDefinition(stage_id="stage_6", profile_id="default_explanation"),
+        stage=ExplanationStage(registry=explanation_registry),
+    )
+    eval_stage = PipelineStageProfile(
+        profile_id="stage_evaluation_default",
+        definition=PipelineStageDefinition(stage_id="stage_7", profile_id="default_evaluation"),
+        stage=EvaluationStage(registry=evaluation_registry),
+    )
+
+    stage_registry = PipelineStageRegistry(
+        profiles=(ret_stage, ver_stage, fa_stage, unc_stage, dec_stage, exp_stage, eval_stage)
+    )
+
+    definition = PipelineDefinition(
+        pipeline_id="default_pipeline",
+        retrieval_stage=ret_stage.definition,
+        verification_stage=ver_stage.definition,
+        failure_analysis_stage=fa_stage.definition,
+        uncertainty_stage=unc_stage.definition,
+        decision_stage=dec_stage.definition,
+        explanation_stage=exp_stage.definition,
+        evaluation_stage=eval_stage.definition,
+    )
+
+    # Create orchestrator first without pipeline registry
+    orchestrator = ModernArbiterPipeline(stage_registry=stage_registry)
+
+    # Create profile
+    profile = PipelineProfile(
+        profile_id="default_pipeline",
+        definition=definition,
+        orchestrator=orchestrator,
+    )
+
+    # Create registry
+    pipeline_registry = PipelineProfileRegistry(profiles=(profile,))
+    
+    # Set registry on orchestrator to complete the cycle
+    orchestrator.set_pipeline_registry(pipeline_registry)
+    
+    return pipeline_registry
+
+
 def build_pipeline(config: AppConfig) -> ArbiterPipeline:
     """Builds the full Arbiter Pipeline."""
     ver_reg = build_verification_registry(config)
     cal_reg = build_calibration_registry(config)
+    
+    retrieval_registry = build_retrieval_registry(config)
+    verification_registry = ver_reg
+    failure_analysis_registry = build_failure_analysis_registry(config)
+    uncertainty_registry = build_uncertainty_registry(config)
+    decision_registry = build_decision_registry(config)
+    explanation_registry = build_explanation_registry(config, ver_reg, cal_reg)
+    evaluation_registry = build_evaluation_registry(config)
+    
+    pipeline_registry = build_pipeline_profile_registry(
+        config=config,
+        retrieval_registry=retrieval_registry,
+        verification_registry=verification_registry,
+        failure_analysis_registry=failure_analysis_registry,
+        uncertainty_registry=uncertainty_registry,
+        decision_registry=decision_registry,
+        explanation_registry=explanation_registry,
+        evaluation_registry=evaluation_registry,
+    )
+    
+    modern_pipeline = pipeline_registry.resolve("default_pipeline").orchestrator
+    
     return ArbiterPipeline(
-        retrieval_registry=build_retrieval_registry(config),
-        verification_registry=ver_reg,
-        failure_analysis_registry=build_failure_analysis_registry(config),
-        uncertainty_registry=build_uncertainty_registry(config),
-        decision_registry=build_decision_registry(config),
-        explanation_registry=build_explanation_registry(config, ver_reg, cal_reg),
-        evaluation_registry=build_evaluation_registry(config),
+        retrieval_registry=retrieval_registry,
+        verification_registry=verification_registry,
+        failure_analysis_registry=failure_analysis_registry,
+        uncertainty_registry=uncertainty_registry,
+        decision_registry=decision_registry,
+        explanation_registry=explanation_registry,
+        evaluation_registry=evaluation_registry,
+        modern_pipeline=modern_pipeline,
     )
 
 

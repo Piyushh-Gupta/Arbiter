@@ -30,13 +30,7 @@ async def evaluate_claim(
     # Map DTO -> Domain Model
     domain_req = PipelineExecutionRequest(
         claim=payload.claim,
-        retrieval_profile_id=payload.retrieval_profile_id,
-        verification_profile_id=payload.verification_profile_id,
-        failure_analysis_profile_id=payload.failure_analysis_profile_id,
-        uncertainty_profile_id=payload.uncertainty_profile_id,
-        decision_profile_id=payload.decision_profile_id,
-        explanation_profile_id=payload.explanation_profile_id,
-        evaluation_profile_id=payload.evaluation_profile_id,
+        pipeline_profile_id=payload.pipeline_profile_id,
     )
 
     # Execute business logic statelessly

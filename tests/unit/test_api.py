@@ -55,13 +55,7 @@ def test_health_check_ready(client: TestClient) -> None:
 def test_successful_evaluation(client: TestClient) -> None:
     payload = {
         "claim": "Test claim",
-        "retrieval_profile_id": "1",
-        "verification_profile_id": "2",
-        "failure_analysis_profile_id": "3",
-        "uncertainty_profile_id": "4",
-        "decision_profile_id": "5",
-        "explanation_profile_id": "6",
-        "evaluation_profile_id": "7",
+        "pipeline_profile_id": "1",
     }
     response = client.post("/v1/evaluate", json=payload)
 
@@ -77,13 +71,7 @@ def test_successful_evaluation(client: TestClient) -> None:
 def test_validation_failure(client: TestClient) -> None:
     payload = {
         # missing claim
-        "retrieval_profile_id": "1",
-        "verification_profile_id": "2",
-        "failure_analysis_profile_id": "3",
-        "uncertainty_profile_id": "4",
-        "decision_profile_id": "5",
-        "explanation_profile_id": "6",
-        "evaluation_profile_id": "7",
+        "pipeline_profile_id": "1",
     }
     response = client.post("/v1/evaluate", json=payload)
     assert response.status_code == 422
@@ -93,13 +81,7 @@ def test_domain_exception_translation(client: TestClient) -> None:
     app.state.pipeline = MockPipeline(should_fail=True)
     payload = {
         "claim": "Test claim",
-        "retrieval_profile_id": "1",
-        "verification_profile_id": "2",
-        "failure_analysis_profile_id": "3",
-        "uncertainty_profile_id": "4",
-        "decision_profile_id": "5",
-        "explanation_profile_id": "6",
-        "evaluation_profile_id": "7",
+        "pipeline_profile_id": "1",
     }
     response = client.post("/v1/evaluate", json=payload)
 
