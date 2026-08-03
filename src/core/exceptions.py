@@ -463,6 +463,14 @@ class DecisionBenchmarkProfileNotFoundError(ArbiterError):
     """Raised when a benchmark profile cannot be resolved from the registry."""
 
 
+class DuplicateDecisionExplanationProfileError(ArbiterError):
+    """Raised when duplicate explanation profile IDs are registered."""
+
+
+class DecisionExplanationProfileNotFoundError(ArbiterError):
+    """Raised when an explanation profile cannot be resolved from the registry."""
+
+
 class ExplanationConfigurationError(ArbiterError):
     """Raised when an explainer configuration is invalid."""
 

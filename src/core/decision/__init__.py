@@ -1,4 +1,4 @@
-"""Decision Engine subsystem for Arbiter (M4.1, M4.2, M4.3, M4.4, and M4.5)."""
+"""Decision Engine subsystem for Arbiter (M4.1, M4.2, M4.3, M4.4, M4.5, and M4.6)."""
 
 from src.core.decision.base import (
     BaseDecisionEngine,
@@ -20,7 +20,6 @@ from src.core.decision.benchmark import (
     DecisionBenchmarkRawOutput,
     DecisionBenchmarkReport,
     DecisionBenchmarkResult,
-    DecisionBenchmarkRunner,
     DecisionBenchmarkSuite,
 )
 from src.core.decision.decision_models import (
@@ -50,6 +49,21 @@ from src.core.decision.decision_models import (
     compute_decision_fingerprint,
 )
 from src.core.decision.engine import DecisionEngine
+from src.core.decision.explainability import (
+    BaseDecisionExplanationStrategy,
+    BaseDecisionRenderer,
+    CompositeExplanationStrategy,
+    DecisionExplanation,
+    DecisionExplanationDefinition,
+    DecisionExplanationProfile,
+    DecisionExplanationProfileRegistry,
+    DecisionExplanationResult,
+    JsonDecisionRenderer,
+    MarkdownDecisionRenderer,
+    SummaryExplanationStrategy,
+    TextDecisionRenderer,
+    TraceAuditExplanationStrategy,
+)
 from src.core.decision.implementations import (
     DecisionPolicyEngine,
     PolicyDecisionStrategy,
@@ -120,4 +134,17 @@ __all__ = [
     "DecisionBenchmarkSuite",
     "DecisionBenchmarkExecutor",
     "DecisionBenchmarkRunner",
+    "BaseDecisionExplanationStrategy",
+    "BaseDecisionRenderer",
+    "CompositeExplanationStrategy",
+    "DecisionExplanation",
+    "DecisionExplanationDefinition",
+    "DecisionExplanationProfile",
+    "DecisionExplanationProfileRegistry",
+    "DecisionExplanationResult",
+    "JsonDecisionRenderer",
+    "MarkdownDecisionRenderer",
+    "SummaryExplanationStrategy",
+    "TextDecisionRenderer",
+    "TraceAuditExplanationStrategy",
 ]

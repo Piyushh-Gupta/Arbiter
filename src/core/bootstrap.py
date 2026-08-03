@@ -1192,6 +1192,57 @@ def build_decision_benchmark_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_decision_explanation_registry(config: AppConfig) -> Any:
+    """Builds and validates the decision explainability profile registry for M4.6."""
+    from src.core.decision.explainability.explainability_models import (
+        DecisionExplanationDefinition,
+        DecisionExplanationProfile,
+        DecisionExplanationProfileRegistry,
+    )
+    from src.core.decision.explainability.strategies import (
+        CompositeExplanationStrategy,
+        SummaryExplanationStrategy,
+        TraceAuditExplanationStrategy,
+    )
+    from src.core.exceptions import DecisionConfigurationError
+
+    definition = DecisionExplanationDefinition(
+        template_format="markdown",
+        include_traces=True,
+        include_risk_factors=True,
+    )
+
+    summary_strat = SummaryExplanationStrategy()
+    trace_strat = TraceAuditExplanationStrategy()
+    composite_strat = CompositeExplanationStrategy()
+
+    # Verify compatibility
+    try:
+        summary_strat.validate_compatibility(definition)
+        trace_strat.validate_compatibility(definition)
+        composite_strat.validate_compatibility(definition)
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision explanation strategy compatibility check failed: {e}"
+        ) from e
+
+    profile = DecisionExplanationProfile(
+        profile_id="default_decision_explanation",
+        definition=definition,
+        strategy=composite_strat,
+    )
+
+    try:
+        registry = DecisionExplanationProfileRegistry(profiles=(profile,))
+        registry.validate_compatibility(definition)
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision explanation registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_explanation_registry(
     config: AppConfig,
     verification_registry: Any = None,
