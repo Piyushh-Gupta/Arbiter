@@ -1243,6 +1243,50 @@ def build_decision_explanation_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_decision_optimization_registry(config: AppConfig) -> Any:
+    """Builds and validates the decision optimization profile registry for M4.7."""
+    from src.core.decision.optimization.optimization_models import (
+        DecisionCacheDefinition,
+        DecisionExecutionGuardDefinition,
+        DecisionOptimizationDefinition,
+        DecisionOptimizationProfile,
+        DecisionOptimizationProfileRegistry,
+    )
+    from src.core.exceptions import DecisionConfigurationError
+
+    cache_def = DecisionCacheDefinition(
+        enabled=True,
+        max_size=1000,
+        ttl_seconds=300,
+    )
+
+    guard_def = DecisionExecutionGuardDefinition(
+        timeout_ms=1000,
+        max_retries=3,
+        fallback_action="ABSTAIN",
+    )
+
+    opt_def = DecisionOptimizationDefinition(
+        cache_config=cache_def,
+        guard_config=guard_def,
+    )
+
+    profile = DecisionOptimizationProfile(
+        profile_id="default_decision_optimization",
+        definition=opt_def,
+    )
+
+    try:
+        registry = DecisionOptimizationProfileRegistry(profiles=(profile,))
+        registry.validate_compatibility(opt_def)
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision optimization registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_explanation_registry(
     config: AppConfig,
     verification_registry: Any = None,

@@ -205,6 +205,7 @@ class DecisionResult(BaseModel):
     action: DecisionAction | str = Field(default=DecisionAction.ABSTAIN)
     rationale: str = Field(default="")
     uncertainty_result: Any = Field(default=None)
+    execution_metrics: Any | None = Field(default=None)
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 

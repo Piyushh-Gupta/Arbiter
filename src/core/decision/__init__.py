@@ -1,4 +1,4 @@
-"""Decision Engine subsystem for Arbiter (M4.1, M4.2, M4.3, M4.4, M4.5, and M4.6)."""
+"""Decision Engine subsystem for Arbiter (M4.1 to M4.7)."""
 
 from src.core.decision.base import (
     BaseDecisionEngine,
@@ -68,6 +68,18 @@ from src.core.decision.implementations import (
     DecisionPolicyEngine,
     PolicyDecisionStrategy,
     ThresholdDecisionEngine,
+)
+from src.core.decision.optimization import (
+    BaseDecisionCache,
+    DecisionCacheDefinition,
+    DecisionExecutionGuard,
+    DecisionExecutionGuardDefinition,
+    DecisionExecutionMetrics,
+    DecisionOptimizationDefinition,
+    DecisionOptimizationProfile,
+    DecisionOptimizationProfileRegistry,
+    InMemoryDecisionCache,
+    OptimizedDecisionStrategy,
 )
 from src.core.decision.policies import (
     CalibratedMetricPolicy,
@@ -147,4 +159,14 @@ __all__ = [
     "SummaryExplanationStrategy",
     "TextDecisionRenderer",
     "TraceAuditExplanationStrategy",
+    "BaseDecisionCache",
+    "DecisionCacheDefinition",
+    "DecisionExecutionGuard",
+    "DecisionExecutionGuardDefinition",
+    "DecisionExecutionMetrics",
+    "DecisionOptimizationDefinition",
+    "DecisionOptimizationProfile",
+    "DecisionOptimizationProfileRegistry",
+    "InMemoryDecisionCache",
+    "OptimizedDecisionStrategy",
 ]

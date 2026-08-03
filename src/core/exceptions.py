@@ -471,6 +471,22 @@ class DecisionExplanationProfileNotFoundError(ArbiterError):
     """Raised when an explanation profile cannot be resolved from the registry."""
 
 
+class DecisionCacheConfigurationError(ArbiterError):
+    """Raised when caching parameters are invalid."""
+
+
+class DecisionExecutionTimeoutError(ArbiterError):
+    """Raised when decision execution times out."""
+
+
+class DuplicateDecisionOptimizationProfileError(ArbiterError):
+    """Raised when duplicate optimization profile IDs are registered."""
+
+
+class DecisionOptimizationProfileNotFoundError(ArbiterError):
+    """Raised when an optimization profile cannot be resolved from the registry."""
+
+
 class ExplanationConfigurationError(ArbiterError):
     """Raised when an explainer configuration is invalid."""
 
