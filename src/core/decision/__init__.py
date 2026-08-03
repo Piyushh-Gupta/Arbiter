@@ -1,4 +1,4 @@
-"""Decision Engine subsystem for Arbiter (M4.1, M4.2, M4.3, and M4.4)."""
+"""Decision Engine subsystem for Arbiter (M4.1, M4.2, M4.3, M4.4, and M4.5)."""
 
 from src.core.decision.base import (
     BaseDecisionEngine,
@@ -6,6 +6,22 @@ from src.core.decision.base import (
     BaseDecisionPolicyEngine,
     BaseDecisionStrategy,
     BaseRiskPolicy,
+)
+from src.core.decision.benchmark import (
+    BaseDecisionBenchmarkExecutor,
+    BaseDecisionBenchmarkRunner,
+    BaseDecisionMetricCalculator,
+    DecisionBenchmarkDataset,
+    DecisionBenchmarkExecutor,
+    DecisionBenchmarkItem,
+    DecisionBenchmarkMetrics,
+    DecisionBenchmarkProfile,
+    DecisionBenchmarkProfileRegistry,
+    DecisionBenchmarkRawOutput,
+    DecisionBenchmarkReport,
+    DecisionBenchmarkResult,
+    DecisionBenchmarkRunner,
+    DecisionBenchmarkSuite,
 )
 from src.core.decision.decision_models import (
     DecisionAction,
@@ -90,4 +106,18 @@ __all__ = [
     "RawRiskPolicy",
     "SeverityThresholdRiskPolicy",
     "CostBenefitRiskPolicy",
+    "BaseDecisionBenchmarkExecutor",
+    "BaseDecisionBenchmarkRunner",
+    "BaseDecisionMetricCalculator",
+    "DecisionBenchmarkDataset",
+    "DecisionBenchmarkItem",
+    "DecisionBenchmarkMetrics",
+    "DecisionBenchmarkProfile",
+    "DecisionBenchmarkProfileRegistry",
+    "DecisionBenchmarkRawOutput",
+    "DecisionBenchmarkReport",
+    "DecisionBenchmarkResult",
+    "DecisionBenchmarkSuite",
+    "DecisionBenchmarkExecutor",
+    "DecisionBenchmarkRunner",
 ]

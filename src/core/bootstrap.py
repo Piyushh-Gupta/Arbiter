@@ -1138,6 +1138,60 @@ def build_decision_registry(config: AppConfig) -> Any:
     return registry
 
 
+def build_decision_benchmark_registry(config: AppConfig) -> Any:
+    """Builds and validates the decision benchmark profile registry for M4.5."""
+    from src.core.decision import DecisionContext
+    from src.core.decision.benchmark.benchmark_models import (
+        DecisionBenchmarkDataset,
+        DecisionBenchmarkItem,
+        DecisionBenchmarkProfile,
+        DecisionBenchmarkProfileRegistry,
+        DecisionBenchmarkSuite,
+    )
+    from src.core.exceptions import DecisionConfigurationError
+
+    # 1. Construct default benchmark dataset
+    item1 = DecisionBenchmarkItem(
+        item_id="item_default_1",
+        context=DecisionContext(),
+        expected_action="ABSTAIN",
+    )
+    dataset = DecisionBenchmarkDataset(
+        dataset_id="default_decision_dataset",
+        items=(item1,),
+    )
+
+    # 2. Construct benchmark suite
+    suite = DecisionBenchmarkSuite(
+        suite_id="default_decision_suite",
+        dataset=dataset,
+    )
+
+    # 4. Construct benchmark profile
+    profile = DecisionBenchmarkProfile(
+        profile_id="default_decision_benchmark",
+        enabled_metrics=(
+            "accuracy",
+            "abstention_rate",
+            "escalation_rate",
+            "mean_latency_ms",
+            "throughput_qps",
+        ),
+        suite_id=suite.suite_id,
+    )
+
+    # 5. Construct registry and validate compatibility
+    try:
+        registry = DecisionBenchmarkProfileRegistry(profiles=(profile,))
+        registry.validate_compatibility(suite.suite_id)
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision benchmark registry initialization failed: {e}"
+        ) from e
+
+    return registry
+
+
 def build_explanation_registry(
     config: AppConfig,
     verification_registry: Any = None,

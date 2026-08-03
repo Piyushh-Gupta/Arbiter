@@ -455,6 +455,14 @@ class DecisionRiskPolicyNotFoundError(ArbiterError):
     """Raised when a risk policy cannot be resolved from the registry."""
 
 
+class DuplicateDecisionBenchmarkProfileError(ArbiterError):
+    """Raised when duplicate benchmark profile IDs are registered."""
+
+
+class DecisionBenchmarkProfileNotFoundError(ArbiterError):
+    """Raised when a benchmark profile cannot be resolved from the registry."""
+
+
 class ExplanationConfigurationError(ArbiterError):
     """Raised when an explainer configuration is invalid."""
 
