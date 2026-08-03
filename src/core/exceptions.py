@@ -439,6 +439,14 @@ class DecisionProfileNotFoundError(ArbiterError):
     """Raised when a decision profile cannot be resolved from the registry."""
 
 
+class DuplicateDecisionMetricPolicyError(ArbiterError):
+    """Raised when duplicate policy IDs are registered in the metric registry."""
+
+
+class DecisionMetricPolicyNotFoundError(ArbiterError):
+    """Raised when a metric policy cannot be resolved from the registry."""
+
+
 class ExplanationConfigurationError(ArbiterError):
     """Raised when an explainer configuration is invalid."""
 

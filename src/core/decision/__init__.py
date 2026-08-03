@@ -1,7 +1,8 @@
-"""Decision Engine subsystem for Arbiter (M4.1 & M4.2)."""
+"""Decision Engine subsystem for Arbiter (M4.1, M4.2, and M4.3)."""
 
 from src.core.decision.base import (
     BaseDecisionEngine,
+    BaseDecisionMetricPolicy,
     BaseDecisionPolicyEngine,
     BaseDecisionStrategy,
 )
@@ -14,6 +15,8 @@ from src.core.decision.decision_models import (
     DecisionExecutionMetadata,
     DecisionInput,
     DecisionMetadata,
+    DecisionMetricPolicyRegistry,
+    DecisionMetrics,
     DecisionPolicyGroup,
     DecisionPolicyResult,
     DecisionProfile,
@@ -32,9 +35,16 @@ from src.core.decision.implementations import (
     PolicyDecisionStrategy,
     ThresholdDecisionEngine,
 )
+from src.core.decision.policies import (
+    CalibratedMetricPolicy,
+    DecisionMetricResolver,
+    EntropyMetricPolicy,
+    RawMetricPolicy,
+)
 
 __all__ = [
     "BaseDecisionEngine",
+    "BaseDecisionMetricPolicy",
     "BaseDecisionPolicyEngine",
     "BaseDecisionStrategy",
     "DecisionAction",
@@ -46,6 +56,8 @@ __all__ = [
     "DecisionExecutionMetadata",
     "DecisionInput",
     "DecisionMetadata",
+    "DecisionMetricPolicyRegistry",
+    "DecisionMetrics",
     "DecisionPolicyEngine",
     "DecisionPolicyGroup",
     "DecisionPolicyResult",
@@ -60,4 +72,8 @@ __all__ = [
     "ThresholdDecisionDefinition",
     "ThresholdDecisionEngine",
     "compute_decision_fingerprint",
+    "CalibratedMetricPolicy",
+    "RawMetricPolicy",
+    "EntropyMetricPolicy",
+    "DecisionMetricResolver",
 ]

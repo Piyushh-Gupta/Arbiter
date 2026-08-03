@@ -4,11 +4,34 @@ from typing import TYPE_CHECKING, Any, Protocol, Sequence, runtime_checkable
 
 if TYPE_CHECKING:
     from src.core.decision.decision_models import (
+        DecisionContext,
+        DecisionDefinition,
         DecisionExecutionContext,
         DecisionInput,
+        DecisionMetrics,
         DecisionPolicyGroup,
         DecisionResult,
     )
+
+
+@runtime_checkable
+class BaseDecisionMetricPolicy(Protocol):
+    """Protocol for pluggable decision metric evaluation policies."""
+
+    @property
+    def policy_id(self) -> str:
+        """Unique identifier for the metric policy."""
+        ...
+
+    def validate_compatibility(self, definition: "DecisionDefinition") -> None:
+        """Validates compatibility with the provided decision configuration."""
+        ...
+
+    def evaluate_metrics(
+        self, context: "DecisionContext", definition: "DecisionDefinition"
+    ) -> "DecisionMetrics":
+        """Computes or resolves confidence and uncertainty metrics from context."""
+        ...
 
 
 @runtime_checkable

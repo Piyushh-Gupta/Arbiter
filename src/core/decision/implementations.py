@@ -32,12 +32,34 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
     and generating immutable DecisionExecutionContext outputs.
     """
 
+    def __init__(self, metric_resolver: Any = None) -> None:
+        if metric_resolver is None:
+            from src.core.decision.decision_models import DecisionMetricPolicyRegistry
+            from src.core.decision.policies import (
+                CalibratedMetricPolicy,
+                DecisionMetricResolver,
+                EntropyMetricPolicy,
+                RawMetricPolicy,
+            )
+
+            registry = DecisionMetricPolicyRegistry(
+                policies=(
+                    CalibratedMetricPolicy(),
+                    RawMetricPolicy(),
+                    EntropyMetricPolicy(),
+                )
+            )
+            metric_resolver = DecisionMetricResolver(registry=registry)
+        self.metric_resolver = metric_resolver
+
     def validate_compatibility(self, definition: Any) -> None:
         """Validates that the provided definition is compatible."""
         if not isinstance(definition, DecisionDefinition):
             raise DecisionConfigurationError(
                 "Invalid definition type for DecisionPolicyEngine."
             )
+        if hasattr(self.metric_resolver, "registry"):
+            self.metric_resolver.registry.validate_compatibility(definition)
 
     def evaluate(
         self,
@@ -60,20 +82,10 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
         context = input_data.context
         definition = input_data.definition
 
-        # Extract values from context
-        confidence = 0.5
-        if context.verification_result and hasattr(
-            context.verification_result, "confidence"
-        ):
-            confidence = getattr(context.verification_result, "confidence", 0.5)
-        elif context.calibration_result and hasattr(
-            context.calibration_result, "calibrated_confidence"
-        ):
-            confidence = getattr(
-                context.calibration_result, "calibrated_confidence", 0.5
-            )
-
-        uncertainty = 1.0 - confidence
+        # Resolve metrics using the metric_resolver
+        metrics = self.metric_resolver.resolve_metrics(context, definition)
+        confidence = metrics.confidence
+        uncertainty = metrics.uncertainty
 
         sev_escalation = False
         if context.severity_result and hasattr(
@@ -191,6 +203,7 @@ class DecisionPolicyEngine(BaseDecisionPolicyEngine):
             execution_metadata=execution_metadata,
             engine_metadata=engine_metadata,
             selected_action=final_action,
+            decision_metrics=metrics,
         )
 
 
@@ -281,6 +294,8 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
             raise DecisionConfigurationError(
                 "Invalid definition type for PolicyDecisionStrategy."
             )
+        if hasattr(self.policy_engine, "validate_compatibility"):
+            self.policy_engine.validate_compatibility(definition)
 
     def decide(
         self,
@@ -310,19 +325,16 @@ class PolicyDecisionStrategy(BaseDecisionStrategy):
         exec_context = self.policy_engine.evaluate(input_data, self.policy_groups)
 
         action = exec_context.selected_action
-        confidence = 0.5
-        if context.verification_result and hasattr(
-            context.verification_result, "confidence"
-        ):
-            confidence = getattr(context.verification_result, "confidence", 0.5)
-        elif context.calibration_result and hasattr(
-            context.calibration_result, "calibrated_confidence"
-        ):
-            confidence = getattr(
-                context.calibration_result, "calibrated_confidence", 0.5
-            )
 
-        uncertainty = 1.0 - confidence
+        # Consume DecisionMetrics from exec_context directly, no direct metric extraction
+        metrics = exec_context.decision_metrics
+        if metrics is not None:
+            confidence = metrics.confidence
+            uncertainty = metrics.uncertainty
+        else:
+            confidence = 0.5
+            uncertainty = 0.5
+
         escalation_req = action == "ESCALATE"
 
         evaluated_rules: list[str] = []

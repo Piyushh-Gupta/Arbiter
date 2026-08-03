@@ -1049,11 +1049,20 @@ def build_uncertainty_registry(config: AppConfig) -> UncertaintyProfileRegistry:
 
 
 def build_decision_registry(config: AppConfig) -> Any:
-    """Builds the decision registry for M4.1 & M4.2."""
-    from src.core.decision.decision_models import DecisionDefinition
+    """Builds the decision registry for M4.1, M4.2, and M4.3."""
+    from src.core.decision.decision_models import (
+        DecisionDefinition,
+        DecisionMetricPolicyRegistry,
+    )
     from src.core.decision.implementations import (
         DecisionPolicyEngine,
         PolicyDecisionStrategy,
+    )
+    from src.core.decision.policies import (
+        CalibratedMetricPolicy,
+        DecisionMetricResolver,
+        EntropyMetricPolicy,
+        RawMetricPolicy,
     )
     from src.core.exceptions import DecisionConfigurationError
 
@@ -1065,7 +1074,21 @@ def build_decision_registry(config: AppConfig) -> Any:
         escalation_policy="default",
     )
 
-    policy_engine = DecisionPolicyEngine()
+    try:
+        metric_registry = DecisionMetricPolicyRegistry(
+            policies=(
+                CalibratedMetricPolicy(),
+                RawMetricPolicy(),
+                EntropyMetricPolicy(),
+            )
+        )
+        metric_resolver = DecisionMetricResolver(registry=metric_registry)
+    except Exception as e:
+        raise DecisionConfigurationError(
+            f"Decision metric registry initialization failed: {e}"
+        ) from e
+
+    policy_engine = DecisionPolicyEngine(metric_resolver=metric_resolver)
     policy_groups = PolicyDecisionStrategy.default_policy_groups()
     strategy = PolicyDecisionStrategy(
         policy_groups=policy_groups,

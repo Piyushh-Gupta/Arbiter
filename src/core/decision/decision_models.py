@@ -161,6 +161,7 @@ class DecisionExecutionContext(BaseModel):
     execution_metadata: DecisionExecutionMetadata = Field(...)
     engine_metadata: DecisionEngineMetadata = Field(...)
     selected_action: str = Field(default="ABSTAIN")
+    decision_metrics: Any = Field(default=None)
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
@@ -218,6 +219,72 @@ class DecisionResult(BaseModel):
             )
             object.__setattr__(self, "final_verdict", act_str)
         return self
+
+
+class DecisionMetrics(BaseModel):
+    """Immutable metrics holding confidence, uncertainty, calibration status, and provenance."""
+
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    uncertainty: float = Field(..., ge=0.0, le=1.0)
+    calibrated: bool = Field(default=False)
+    source: str = Field(..., min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DecisionMetricPolicyRegistry(BaseModel):
+    """O(1) registry resolver for pluggable metric policies."""
+
+    policies: tuple[Any, ...] = Field(..., min_length=1)
+
+    _policy_index: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def _build_and_validate_index(self) -> "DecisionMetricPolicyRegistry":
+        from src.core.exceptions import DuplicateDecisionMetricPolicyError
+
+        index: dict[str, Any] = {}
+        for p in self.policies:
+            policy_id = p.policy_id
+            if policy_id in index:
+                raise DuplicateDecisionMetricPolicyError(
+                    f"Duplicate metric policy ID detected: {policy_id}"
+                )
+            index[policy_id] = p
+        object.__setattr__(self, "_policy_index", index)
+        return self
+
+    def resolve(self, policy_id: str) -> Any:
+        from src.core.exceptions import DecisionMetricPolicyNotFoundError
+
+        if policy_id not in self._policy_index:
+            raise DecisionMetricPolicyNotFoundError(
+                f"Decision metric policy not found: {policy_id}"
+            )
+        return self._policy_index[policy_id]
+
+    def validate_compatibility(self, definition: Any) -> None:
+        """Validates that the policies specified in the definition exist in the registry and are compatible."""
+        conf_policy_id = getattr(definition, "confidence_policy", "calibrated")
+        from src.core.exceptions import DecisionMetricPolicyNotFoundError
+
+        if conf_policy_id not in self._policy_index:
+            raise DecisionMetricPolicyNotFoundError(
+                f"Metric policy '{conf_policy_id}' not found in registry."
+            )
+
+        policy = self._policy_index[conf_policy_id]
+        if hasattr(policy, "validate_compatibility"):
+            policy.validate_compatibility(definition)
+
+        unc_policy_id = getattr(definition, "uncertainty_policy", "threshold_based")
+        if unc_policy_id in self._policy_index:
+            unc_policy = self._policy_index[unc_policy_id]
+            if hasattr(unc_policy, "validate_compatibility"):
+                unc_policy.validate_compatibility(definition)
 
 
 class DecisionProfile(BaseModel):
