@@ -2028,3 +2028,44 @@ def build_resilience_controller(config: AppConfig, executor: Any) -> Any:
     retry_strategy = FixedRetryStrategy(retryable_types=tuple(retryable_types))
     timeout_policy = ThreadPoolTimeoutPolicy(executor=executor)
     return PipelineResilienceController(retry_strategy, timeout_policy)
+
+
+def build_pipeline_benchmark_registry(config: Any) -> Any:
+    """Builds the pipeline benchmark registry containing the default benchmark profile."""
+    from src.core.exceptions import PipelineBenchmarkConfigurationError
+    from src.core.pipeline.benchmark import (
+        PipelineBenchmarkDefinition,
+        PipelineBenchmarkMetric,
+        PipelineBenchmarkProfile,
+        PipelineBenchmarkProfileRegistry,
+    )
+
+    b_settings = config.pipeline_benchmark
+
+    # Resolve metric strings to enums
+    metrics = []
+    for metric_str in b_settings.enabled_metrics:
+        try:
+            metrics.append(PipelineBenchmarkMetric(metric_str))
+        except ValueError as e:
+            raise PipelineBenchmarkConfigurationError(
+                f"Unknown pipeline benchmark metric: {metric_str}"
+            ) from e
+
+    try:
+        definition = PipelineBenchmarkDefinition(
+            enabled_metrics=tuple(metrics),
+            include_stage_breakdown=b_settings.include_stage_breakdown,
+        )
+        profile = PipelineBenchmarkProfile(
+            profile_id=b_settings.active_profile_id,
+            suite_id=b_settings.default_suite_id,
+            definition=definition,
+        )
+        registry = PipelineBenchmarkProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise PipelineBenchmarkConfigurationError(
+            f"Pipeline benchmark registry validation failed: {e}"
+        ) from e
+
+    return registry

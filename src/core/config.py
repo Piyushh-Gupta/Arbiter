@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     pipeline_resilience: "PipelineResilienceSettings" = Field(
         default_factory=lambda: PipelineResilienceSettings()
     )
+    pipeline_benchmark: "PipelineBenchmarkSettings" = Field(
+        default_factory=lambda: PipelineBenchmarkSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -169,5 +172,29 @@ class PipelineResilienceSettings(BaseModel):
     recovery_strategy_id: str = Field(default="default_recovery")
 
 
-# Modify Settings class to include pipeline_telemetry
+class PipelineBenchmarkSettings(BaseModel):
+    """Configuration settings for pipeline benchmarking."""
+
+    enabled: bool = Field(default=True)
+    active_profile_id: str = Field(default="default_pipeline_benchmark")
+    default_suite_id: str = Field(default="default_pipeline_suite")
+    enabled_metrics: list[str] = Field(
+        default_factory=lambda: [
+            "success_rate",
+            "mean_latency_ms",
+            "p50_latency_ms",
+            "p95_latency_ms",
+            "p99_latency_ms",
+            "throughput_qps",
+            "retry_rate",
+            "mean_retry_attempts",
+            "timeout_rate",
+            "recovery_rate",
+            "determinism_rate",
+        ]
+    )
+    include_stage_breakdown: bool = Field(default=True)
+
+
+# Modify Settings class to include pipeline subsystems
 settings = Settings()

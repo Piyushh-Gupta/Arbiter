@@ -1,6 +1,19 @@
 """Pipeline orchestration subsystem exports."""
 
 from src.core.pipeline.base import BasePipelineOrchestrator, BasePipelineStage
+from src.core.pipeline.benchmark import (
+    PipelineBenchmarkDataset,
+    PipelineBenchmarkDefinition,
+    PipelineBenchmarkExecutor,
+    PipelineBenchmarkItem,
+    PipelineBenchmarkMetric,
+    PipelineBenchmarkMetrics,
+    PipelineBenchmarkProfile,
+    PipelineBenchmarkProfileRegistry,
+    PipelineBenchmarkReport,
+    PipelineBenchmarkResult,
+    PipelineBenchmarkRunner,
+)
 from src.core.pipeline.orchestrator import ArbiterPipeline, ModernArbiterPipeline
 from src.core.pipeline.pipeline_models import (
     PipelineDefinition,
@@ -64,4 +77,15 @@ __all__ = [
     "PipelineRecoveryResult",
     "RetryExecutionTrace",
     "ResilienceRuntimeMetadata",
+    "PipelineBenchmarkDataset",
+    "PipelineBenchmarkDefinition",
+    "PipelineBenchmarkItem",
+    "PipelineBenchmarkMetric",
+    "PipelineBenchmarkMetrics",
+    "PipelineBenchmarkProfile",
+    "PipelineBenchmarkProfileRegistry",
+    "PipelineBenchmarkReport",
+    "PipelineBenchmarkResult",
+    "PipelineBenchmarkRunner",
+    "PipelineBenchmarkExecutor",
 ]

@@ -565,3 +565,15 @@ class DuplicateResilienceProfileError(ArbiterError):
 
 class ResilienceProfileNotFoundError(ArbiterError):
     """Raised when a PipelineResilienceProfile cannot be resolved from the registry."""
+
+
+class PipelineBenchmarkConfigurationError(ArbiterError):
+    """Raised when a PipelineBenchmarkProfile or registry contains invalid configuration."""
+
+
+class DuplicatePipelineBenchmarkProfileError(ArbiterError):
+    """Raised when duplicate benchmark profile IDs are registered."""
+
+
+class PipelineBenchmarkProfileNotFoundError(ArbiterError):
+    """Raised when a benchmark profile cannot be resolved from the registry."""
