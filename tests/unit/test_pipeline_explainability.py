@@ -184,7 +184,9 @@ def test_summary_explanation_strategy() -> None:
     strategy = SummaryExplanationStrategy()
     explanation = strategy.generate_explanation(input_data, definition)
 
+    assert isinstance(explanation, PipelineExecutionExplanation)
     assert explanation.execution_id == "exec_123"
+
     assert explanation.pipeline_id == "pipe_abc"
     assert explanation.claim_length == len("Arbiter is fully stateless.")
     assert explanation.success is True
@@ -249,7 +251,9 @@ def test_execution_trace_strategy_with_resilience() -> None:
     explanation = strategy.generate_explanation(input_data, definition)
 
     assert explanation.decision_trace is not None
+    assert isinstance(explanation.decision_trace, PipelineDecisionTrace)
     assert explanation.decision_trace.total_attempts == 2
+
     assert explanation.decision_trace.succeeded_on_attempt == 2
     assert explanation.decision_trace.timeout_enforced is True
     assert explanation.decision_trace.recovery_invoked is True
@@ -468,6 +472,10 @@ def test_bootstrap_integration() -> None:
 
     resolved = registry.resolve("default_pipeline_explanation")
     assert resolved.profile_id == "default_pipeline_explanation"
+
+    settings.pipeline_explanation.default_renderer_id = "invalid_renderer"
+    with pytest.raises(PipelineExplanationConfigurationError):
+        build_pipeline_explanation_registry(settings)
 
 
 # ==========================================
