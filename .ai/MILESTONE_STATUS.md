@@ -136,6 +136,8 @@
 - [x] M5.2 Pipeline Stage Observability & Telemetry
 - [x] M5.3 Pipeline Recovery, Retry & Resilience
 - [x] M5.4 Pipeline Benchmarking & Evaluation Framework
+- [x] M5.5 Pipeline Explainability & Execution Audit Framework
+
 
 
 

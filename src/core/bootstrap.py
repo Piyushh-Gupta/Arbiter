@@ -2069,3 +2069,79 @@ def build_pipeline_benchmark_registry(config: Any) -> Any:
         ) from e
 
     return registry
+
+
+def build_pipeline_explanation_registry(config: Any) -> Any:
+    """Builds and validates the pipeline explanation profile registry."""
+    from src.core.exceptions import PipelineExplanationConfigurationError
+    from src.core.pipeline.explainability import (
+        CompositePipelineExplanationStrategy,
+        ExecutionTraceStrategy,
+        PipelineExplanationDefinition,
+        PipelineExplanationFormat,
+        PipelineExplanationProfile,
+        PipelineExplanationProfileRegistry,
+        StageBreakdownStrategy,
+        SummaryExplanationStrategy,
+    )
+
+    settings = config.pipeline_explanation
+
+    try:
+        fmt = PipelineExplanationFormat(settings.default_renderer_id)
+    except ValueError as e:
+        raise PipelineExplanationConfigurationError(
+            f"Invalid template format configured: {settings.default_renderer_id}"
+        ) from e
+
+    definition = PipelineExplanationDefinition(
+        template_format=fmt,
+        include_stage_breakdown=settings.include_stage_breakdown,
+        include_resilience_trace=settings.include_resilience_trace,
+        include_telemetry_summary=settings.include_telemetry_summary,
+        include_configuration_fingerprint=settings.include_configuration_fingerprint,
+    )
+
+    summary_strat = SummaryExplanationStrategy()
+    trace_strat = ExecutionTraceStrategy()
+    breakdown_strat = StageBreakdownStrategy()
+    composite_strat = CompositePipelineExplanationStrategy()
+
+    try:
+        summary_strat.validate_compatibility(definition)
+        trace_strat.validate_compatibility(definition)
+        breakdown_strat.validate_compatibility(definition)
+        composite_strat.validate_compatibility(definition)
+    except Exception as e:
+        raise PipelineExplanationConfigurationError(
+            f"Strategy compatibility check failed: {e}"
+        ) from e
+
+    strategy_map = {
+        "pipeline_summary": summary_strat,
+        "pipeline_trace": trace_strat,
+        "pipeline_stage_breakdown": breakdown_strat,
+        "pipeline_composite": composite_strat,
+    }
+
+    selected_strategy = strategy_map.get(settings.default_strategy_id)
+    if selected_strategy is None:
+        raise PipelineExplanationConfigurationError(
+            f"Unknown explanation strategy configured: {settings.default_strategy_id}"
+        )
+
+    profile = PipelineExplanationProfile(
+        profile_id=settings.active_profile_id,
+        definition=definition,
+        strategy=selected_strategy,
+    )
+
+    try:
+        registry = PipelineExplanationProfileRegistry(profiles=(profile,))
+        registry.validate_compatibility(definition)
+    except Exception as e:
+        raise PipelineExplanationConfigurationError(
+            f"Pipeline explanation registry initialization failed: {e}"
+        ) from e
+
+    return registry

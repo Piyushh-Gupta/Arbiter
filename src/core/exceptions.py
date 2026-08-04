@@ -577,3 +577,15 @@ class DuplicatePipelineBenchmarkProfileError(ArbiterError):
 
 class PipelineBenchmarkProfileNotFoundError(ArbiterError):
     """Raised when a benchmark profile cannot be resolved from the registry."""
+
+
+class PipelineExplanationConfigurationError(ArbiterError):
+    """Raised when a PipelineExplanationProfile or registry contains invalid configuration."""
+
+
+class DuplicatePipelineExplanationProfileError(ArbiterError):
+    """Raised when a PipelineExplanationProfileRegistry detects a duplicate profile_id."""
+
+
+class PipelineExplanationProfileNotFoundError(ArbiterError):
+    """Raised when a PipelineExplanationProfile cannot be resolved from the registry."""

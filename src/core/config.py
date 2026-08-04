@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     pipeline_benchmark: "PipelineBenchmarkSettings" = Field(
         default_factory=lambda: PipelineBenchmarkSettings()
     )
+    pipeline_explanation: "PipelineExplanationSettings" = Field(
+        default_factory=lambda: PipelineExplanationSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -194,6 +197,19 @@ class PipelineBenchmarkSettings(BaseModel):
         ]
     )
     include_stage_breakdown: bool = Field(default=True)
+
+
+class PipelineExplanationSettings(BaseModel):
+    """Configuration settings for pipeline explainability."""
+
+    enabled: bool = Field(default=True)
+    active_profile_id: str = Field(default="default_pipeline_explanation")
+    default_strategy_id: str = Field(default="pipeline_composite")
+    default_renderer_id: str = Field(default="markdown")
+    include_stage_breakdown: bool = Field(default=True)
+    include_resilience_trace: bool = Field(default=True)
+    include_telemetry_summary: bool = Field(default=True)
+    include_configuration_fingerprint: bool = Field(default=True)
 
 
 # Modify Settings class to include pipeline subsystems
