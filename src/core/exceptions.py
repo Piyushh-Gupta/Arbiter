@@ -549,3 +549,19 @@ class DuplicateTelemetryProfileError(ArbiterError):
 
 class TelemetryProfileNotFoundError(ArbiterError):
     """Raised when a telemetry exporter profile cannot be resolved from the registry."""
+
+
+class PipelineResilienceConfigurationError(ArbiterError):
+    """Raised when a PipelineResilienceProfile or registry contains invalid configuration."""
+
+
+class PipelineResilienceTimeoutError(PipelineStageExecutionError):
+    """Raised when a pipeline execution exceeds the configured timeout threshold."""
+
+
+class DuplicateResilienceProfileError(ArbiterError):
+    """Raised when a PipelineResilienceProfileRegistry detects a duplicate profile_id."""
+
+
+class ResilienceProfileNotFoundError(ArbiterError):
+    """Raised when a PipelineResilienceProfile cannot be resolved from the registry."""

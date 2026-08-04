@@ -1694,7 +1694,12 @@ def build_pipeline_profile_registry(
     return pipeline_registry
 
 
-def build_pipeline(config: AppConfig, telemetry_hook: Any = None) -> ArbiterPipeline:
+def build_pipeline(
+    config: AppConfig,
+    telemetry_hook: Any = None,
+    resilience_controller: Any = None,
+    resilience_profile: Any = None,
+) -> ArbiterPipeline:
     """Builds the full Arbiter Pipeline."""
     ver_reg = build_verification_registry(config)
     cal_reg = build_calibration_registry(config)
@@ -1730,6 +1735,8 @@ def build_pipeline(config: AppConfig, telemetry_hook: Any = None) -> ArbiterPipe
         evaluation_registry=evaluation_registry,
         modern_pipeline=modern_pipeline,
         telemetry_hook=telemetry_hook,
+        resilience_controller=resilience_controller,
+        resilience_profile=resilience_profile,
     )
 
 
@@ -1908,3 +1915,116 @@ def build_telemetry_engine(config: AppConfig) -> Any:
         exporter_registry=exporter_registry,
         event_factory=event_factory,
     )
+
+
+def build_resilience_registry(config: AppConfig, executor: Any = None) -> Any:
+    """Builds and validates the pipeline resilience registry."""
+
+    from src.core.exceptions import (
+        PipelineResilienceConfigurationError,
+        PipelineResilienceTimeoutError,
+        PipelineStageExecutionError,
+    )
+    from src.core.pipeline.resilience import (
+        BaseRecoveryStrategy,
+        LogAndFailRecoveryStrategy,
+        NullRecoveryStrategy,
+        PipelineResilienceDefinition,
+        PipelineResilienceProfile,
+        PipelineResilienceProfileRegistry,
+        RecoveryDefinition,
+        RetryDefinition,
+        TimeoutDefinition,
+    )
+
+    r_settings = config.pipeline_resilience
+
+    # Resolve configured exception strings to type objects
+    exception_map = {
+        "PipelineStageExecutionError": PipelineStageExecutionError,
+        "PipelineResilienceTimeoutError": PipelineResilienceTimeoutError,
+    }
+    retryable_types = []
+    for exc_name in r_settings.retryable_exceptions:
+        if exc_name in exception_map:
+            retryable_types.append(exception_map[exc_name])
+        else:
+            raise PipelineResilienceConfigurationError(
+                f"Unsupported retryable exception configured: {exc_name}"
+            )
+
+    retry_def = RetryDefinition(
+        max_attempts=r_settings.max_retry_attempts,
+        retry_delay_ms=r_settings.retry_delay_ms,
+        retryable_on=tuple(r_settings.retryable_exceptions),
+    )
+
+    timeout_def = TimeoutDefinition(
+        enabled=r_settings.timeout_enabled,
+        timeout_ms=r_settings.timeout_ms,
+    )
+
+    recovery_def = RecoveryDefinition(
+        strategy_id=r_settings.recovery_strategy_id,
+        enabled=True,
+    )
+
+    resilience_def = PipelineResilienceDefinition(
+        enabled=r_settings.enabled,
+        retry=retry_def,
+        timeout=timeout_def,
+        recovery=recovery_def,
+    )
+
+    # Construct strategies
+    recovery_strategy: BaseRecoveryStrategy
+    if r_settings.recovery_strategy_id == "default_recovery":
+        recovery_strategy = NullRecoveryStrategy()
+    elif r_settings.recovery_strategy_id == "log_and_fail_recovery":
+        recovery_strategy = LogAndFailRecoveryStrategy()
+    else:
+        raise PipelineResilienceConfigurationError(
+            f"Unknown recovery strategy ID: {r_settings.recovery_strategy_id}"
+        )
+
+    try:
+        profile = PipelineResilienceProfile(
+            profile_id="default_resilience",
+            definition=resilience_def,
+            recovery_strategy=recovery_strategy,
+        )
+        registry = PipelineResilienceProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise PipelineResilienceConfigurationError(
+            f"Resilience registry validation failed: {e}"
+        ) from e
+
+    return registry
+
+
+def build_resilience_controller(config: AppConfig, executor: Any) -> Any:
+    """Builds the pipeline resilience controller coordinating timeouts and retries."""
+    from src.core.exceptions import (
+        PipelineResilienceTimeoutError,
+        PipelineStageExecutionError,
+    )
+    from src.core.pipeline.resilience import (
+        FixedRetryStrategy,
+        PipelineResilienceController,
+        ThreadPoolTimeoutPolicy,
+    )
+
+    r_settings = config.pipeline_resilience
+
+    exception_map = {
+        "PipelineStageExecutionError": PipelineStageExecutionError,
+        "PipelineResilienceTimeoutError": PipelineResilienceTimeoutError,
+    }
+    retryable_types = []
+    for exc_name in r_settings.retryable_exceptions:
+        if exc_name in exception_map:
+            retryable_types.append(exception_map[exc_name])
+
+    retry_strategy = FixedRetryStrategy(retryable_types=tuple(retryable_types))
+    timeout_policy = ThreadPoolTimeoutPolicy(executor=executor)
+    return PipelineResilienceController(retry_strategy, timeout_policy)

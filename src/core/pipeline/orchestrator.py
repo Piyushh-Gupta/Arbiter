@@ -352,6 +352,8 @@ class ArbiterPipeline:
         evaluation_registry: Any = None,
         modern_pipeline: ModernArbiterPipeline | None = None,
         telemetry_hook: Callable[[PipelineExecutionResult], None] | None = None,
+        resilience_controller: Any = None,
+        resilience_profile: Any = None,
     ) -> None:
         self._retrieval_registry = retrieval_registry
         self._verification_registry = verification_registry
@@ -362,13 +364,25 @@ class ArbiterPipeline:
         self._evaluation_registry = evaluation_registry
         self.modern_pipeline = modern_pipeline
         self._telemetry_hook = telemetry_hook
+        self._resilience_controller = resilience_controller
+        self._resilience_profile = resilience_profile
 
     def execute(self, request: PipelineExecutionRequest) -> EvaluationResult:
         if self.modern_pipeline is None:
             raise PipelineConfigurationError(
                 "Modern pipeline adapter missing modern_pipeline instance."
             )
-        result = self.modern_pipeline.execute(request)
+        result: PipelineExecutionResult
+        if (
+            self._resilience_controller is not None
+            and self._resilience_profile is not None
+        ):
+            result = self._resilience_controller.execute(
+                request, self.modern_pipeline, self._resilience_profile
+            )
+        else:
+            result = self.modern_pipeline.execute(request)
+
         if self._telemetry_hook is not None:
             self._telemetry_hook(result)
         return result.evaluation_result

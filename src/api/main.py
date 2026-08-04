@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -9,6 +10,8 @@ from src.api.routes import evaluation, health
 from src.core.bootstrap import (
     build_calibration_registry,
     build_pipeline,
+    build_resilience_controller,
+    build_resilience_registry,
     build_telemetry_engine,
     build_verification_operational_registry,
     build_verification_optimization_registry,
@@ -27,9 +30,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         initialize_application(config)
         telemetry_engine = build_telemetry_engine(config)
-        pipeline = build_pipeline(config, telemetry_hook=telemetry_engine.observe)
+
+        # Set up pipeline resilience dependencies
+        resilience_executor = ThreadPoolExecutor(max_workers=4)
+        resilience_registry = build_resilience_registry(config, resilience_executor)
+        resilience_controller = build_resilience_controller(config, resilience_executor)
+        resilience_profile = resilience_registry.resolve(
+            config.pipeline_resilience.active_resilience_profile_id
+        )
+
+        pipeline = build_pipeline(
+            config,
+            telemetry_hook=telemetry_engine.observe,
+            resilience_controller=resilience_controller,
+            resilience_profile=resilience_profile,
+        )
         app.state.pipeline = pipeline
         app.state.telemetry_engine = telemetry_engine
+        app.state.resilience_executor = resilience_executor
+        app.state.resilience_registry = resilience_registry
+        app.state.resilience_controller = resilience_controller
         app.state.verification_optimization_registry = (
             build_verification_optimization_registry(config)
         )
@@ -38,7 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         app.state.calibration_registry = build_calibration_registry(config)
         logger.info(
-            "Arbiter Pipeline, telemetry engine, and optimization/operational/calibration registries mounted successfully."
+            "Arbiter Pipeline, telemetry engine, resilience engine, and optimization/operational/calibration registries mounted successfully."
         )
     except Exception as e:
         # We explicitly log startup failures using the infrastructure logger
@@ -49,13 +69,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Graceful Shutdown
     logger.info("Initiating graceful shutdown...")
+    if (
+        hasattr(app.state, "resilience_executor")
+        and app.state.resilience_executor is not None
+    ):
+        app.state.resilience_executor.shutdown(wait=True)
     app.state.pipeline = None
     app.state.telemetry_engine = None
+    app.state.resilience_executor = None
+    app.state.resilience_registry = None
+    app.state.resilience_controller = None
     app.state.verification_optimization_registry = None
     app.state.verification_operational_registry = None
     app.state.calibration_registry = None
     logger.info(
-        "Arbiter Pipeline reference, telemetry engine, and operational/calibration references released."
+        "Arbiter Pipeline reference, telemetry engine, resilience executor/registry, and operational/calibration references released."
     )
 
 

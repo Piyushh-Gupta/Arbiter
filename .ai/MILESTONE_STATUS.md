@@ -134,6 +134,8 @@
 ## M5 Pipeline Modernization
 - [x] M5.1 Pipeline Architecture Modernization
 - [x] M5.2 Pipeline Stage Observability & Telemetry
+- [x] M5.3 Pipeline Recovery, Retry & Resilience
+
 
 
 

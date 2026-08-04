@@ -17,6 +17,15 @@ from src.core.pipeline.profile_models import (
     PipelineStageProfile,
     PipelineStageRegistry,
 )
+from src.core.pipeline.resilience import (
+    PipelineRecoveryResult,
+    PipelineResilienceController,
+    PipelineResilienceDefinition,
+    PipelineResilienceProfile,
+    PipelineResilienceProfileRegistry,
+    ResilienceRuntimeMetadata,
+    RetryExecutionTrace,
+)
 from src.core.pipeline.telemetry import (
     PipelineTelemetryDefinition,
     PipelineTelemetryEngine,
@@ -48,4 +57,11 @@ __all__ = [
     "PipelineTelemetrySnapshot",
     "PipelineTelemetryEvent",
     "TelemetryExporterProfile",
+    "PipelineResilienceController",
+    "PipelineResilienceProfile",
+    "PipelineResilienceProfileRegistry",
+    "PipelineResilienceDefinition",
+    "PipelineRecoveryResult",
+    "RetryExecutionTrace",
+    "ResilienceRuntimeMetadata",
 ]

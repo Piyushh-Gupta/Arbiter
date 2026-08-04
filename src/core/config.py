@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     pipeline_telemetry: "PipelineTelemetrySettings" = Field(
         default_factory=lambda: PipelineTelemetrySettings()
     )
+    pipeline_resilience: "PipelineResilienceSettings" = Field(
+        default_factory=lambda: PipelineResilienceSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -151,7 +154,20 @@ class PipelineTelemetrySettings(BaseModel):
     json_pretty_print: bool = Field(default=False)
 
 
+class PipelineResilienceSettings(BaseModel):
+    """Configuration settings for pipeline resilience."""
+
+    enabled: bool = Field(default=True)
+    max_retry_attempts: int = Field(default=3, ge=1, le=10)
+    retry_delay_ms: float = Field(default=100.0, ge=0.0)
+    retryable_exceptions: list[str] = Field(
+        default_factory=lambda: ["PipelineStageExecutionError"]
+    )
+    timeout_enabled: bool = Field(default=True)
+    timeout_ms: float = Field(default=30_000.0, gt=0.0)
+    active_resilience_profile_id: str = Field(default="default_resilience")
+    recovery_strategy_id: str = Field(default="default_recovery")
+
+
 # Modify Settings class to include pipeline_telemetry
-
-
 settings = Settings()
