@@ -9,6 +9,7 @@ from src.api.routes import evaluation, health
 from src.core.bootstrap import (
     build_calibration_registry,
     build_pipeline,
+    build_telemetry_engine,
     build_verification_operational_registry,
     build_verification_optimization_registry,
     initialize_application,
@@ -25,8 +26,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = Settings()
     try:
         initialize_application(config)
-        pipeline = build_pipeline(config)
+        telemetry_engine = build_telemetry_engine(config)
+        pipeline = build_pipeline(config, telemetry_hook=telemetry_engine.observe)
         app.state.pipeline = pipeline
+        app.state.telemetry_engine = telemetry_engine
         app.state.verification_optimization_registry = (
             build_verification_optimization_registry(config)
         )
@@ -35,7 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         app.state.calibration_registry = build_calibration_registry(config)
         logger.info(
-            "Arbiter Pipeline and optimization/operational/calibration registries mounted successfully."
+            "Arbiter Pipeline, telemetry engine, and optimization/operational/calibration registries mounted successfully."
         )
     except Exception as e:
         # We explicitly log startup failures using the infrastructure logger
@@ -47,11 +50,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Graceful Shutdown
     logger.info("Initiating graceful shutdown...")
     app.state.pipeline = None
+    app.state.telemetry_engine = None
     app.state.verification_optimization_registry = None
     app.state.verification_operational_registry = None
     app.state.calibration_registry = None
     logger.info(
-        "Arbiter Pipeline reference and operational/calibration references released."
+        "Arbiter Pipeline reference, telemetry engine, and operational/calibration references released."
     )
 
 

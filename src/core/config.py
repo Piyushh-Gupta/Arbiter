@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     verification_hardening: "VerificationHardeningSettings" = Field(
         default_factory=lambda: VerificationHardeningSettings()
     )
+    pipeline_telemetry: "PipelineTelemetrySettings" = Field(
+        default_factory=lambda: PipelineTelemetrySettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -132,6 +135,23 @@ class VerificationHardeningSettings(BaseModel):
     logging_configuration: dict[str, Any] = Field(default_factory=dict)
     readiness_configuration: dict[str, Any] = Field(default_factory=dict)
     telemetry_configuration: dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineTelemetrySettings(BaseModel):
+    """Configuration settings for pipeline telemetry."""
+
+    enabled: bool = Field(default=True)
+    snapshot_on_every_execution: bool = Field(default=False)
+    active_exporters: list[str] = Field(
+        default_factory=lambda: ["default_log_exporter"]
+    )
+    log_level: str = Field(default="INFO")
+    include_stage_breakdown: bool = Field(default=True)
+    json_output_path: str = Field(default="data/telemetry/snapshot.json")
+    json_pretty_print: bool = Field(default=False)
+
+
+# Modify Settings class to include pipeline_telemetry
 
 
 settings = Settings()

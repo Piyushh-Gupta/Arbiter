@@ -533,3 +533,19 @@ class DuplicatePipelineProfileError(ArbiterError):
 
 class PipelineProfileNotFoundError(ArbiterError):
     """Raised when a PipelineProfile cannot be resolved from the registry."""
+
+
+class TelemetryConfigurationError(ArbiterError):
+    """Raised when a telemetry exporter or collector configuration is invalid."""
+
+
+class TelemetryExecutionError(ArbiterError):
+    """Raised when a telemetry exporter encounters a runtime failure."""
+
+
+class DuplicateTelemetryProfileError(ArbiterError):
+    """Raised when a TelemetryExporterRegistry encounters a duplicate profile_id."""
+
+
+class TelemetryProfileNotFoundError(ArbiterError):
+    """Raised when a telemetry exporter profile cannot be resolved from the registry."""

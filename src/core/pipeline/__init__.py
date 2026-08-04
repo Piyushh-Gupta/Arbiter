@@ -17,6 +17,14 @@ from src.core.pipeline.profile_models import (
     PipelineStageProfile,
     PipelineStageRegistry,
 )
+from src.core.pipeline.telemetry import (
+    PipelineTelemetryDefinition,
+    PipelineTelemetryEngine,
+    PipelineTelemetryEvent,
+    PipelineTelemetrySnapshot,
+    TelemetryExporterProfile,
+    TelemetryExporterRegistry,
+)
 
 __all__ = [
     "BasePipelineOrchestrator",
@@ -34,4 +42,10 @@ __all__ = [
     "PipelineProfileRegistry",
     "PipelineStageProfile",
     "PipelineStageRegistry",
+    "PipelineTelemetryEngine",
+    "PipelineTelemetryDefinition",
+    "TelemetryExporterRegistry",
+    "PipelineTelemetrySnapshot",
+    "PipelineTelemetryEvent",
+    "TelemetryExporterProfile",
 ]

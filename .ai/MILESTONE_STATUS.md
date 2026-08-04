@@ -131,6 +131,11 @@
 - [x] M4.6 Decision Explainability & Audit Reporting
 - [x] M4.7 Decision Engine Production Optimization & Hardening
 
+## M5 Pipeline Modernization
+- [x] M5.1 Pipeline Architecture Modernization
+- [x] M5.2 Pipeline Stage Observability & Telemetry
+
+
 
 
 

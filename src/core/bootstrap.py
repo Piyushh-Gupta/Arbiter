@@ -1694,7 +1694,7 @@ def build_pipeline_profile_registry(
     return pipeline_registry
 
 
-def build_pipeline(config: AppConfig) -> ArbiterPipeline:
+def build_pipeline(config: AppConfig, telemetry_hook: Any = None) -> ArbiterPipeline:
     """Builds the full Arbiter Pipeline."""
     ver_reg = build_verification_registry(config)
     cal_reg = build_calibration_registry(config)
@@ -1729,6 +1729,7 @@ def build_pipeline(config: AppConfig) -> ArbiterPipeline:
         explanation_registry=explanation_registry,
         evaluation_registry=evaluation_registry,
         modern_pipeline=modern_pipeline,
+        telemetry_hook=telemetry_hook,
     )
 
 
@@ -1818,3 +1819,92 @@ def build_verification_operational_registry(
         ) from e
 
     return registry
+
+
+def build_telemetry_engine(config: AppConfig) -> Any:
+    """Builds and validates the pipeline telemetry engine."""
+    from src.core.exceptions import TelemetryConfigurationError
+    from src.core.pipeline.telemetry import (
+        DefaultTelemetryEventFactory,
+        InMemoryTelemetryCollector,
+        JsonTelemetryExporter,
+        JsonTelemetryExporterDefinition,
+        LogTelemetryExporter,
+        LogTelemetryExporterDefinition,
+        PipelineTelemetryDefinition,
+        PipelineTelemetryEngine,
+        TelemetryExporterProfile,
+        TelemetryExporterRegistry,
+    )
+
+    t_settings = config.pipeline_telemetry
+
+    # 1. Construct definitions
+    log_def = LogTelemetryExporterDefinition(
+        exporter_id="default_log_exporter",
+        log_level=t_settings.log_level,
+        include_stage_breakdown=t_settings.include_stage_breakdown,
+    )
+
+    json_def = JsonTelemetryExporterDefinition(
+        exporter_id="default_json_exporter",
+        output_path=t_settings.json_output_path,
+        pretty_print=t_settings.json_pretty_print,
+    )
+
+    # 2. Construct exporters
+    log_exporter = LogTelemetryExporter()
+    json_exporter = JsonTelemetryExporter()
+
+    # 3. Construct profiles (compatibility is validated inside model_validator)
+    try:
+        log_profile = TelemetryExporterProfile(
+            profile_id="default_log_exporter",
+            definition=log_def,
+            exporter=log_exporter,
+        )
+        json_profile = TelemetryExporterProfile(
+            profile_id="default_json_exporter",
+            definition=json_def,
+            exporter=json_exporter,
+        )
+    except Exception as e:
+        raise TelemetryConfigurationError(
+            f"Failed to construct exporter profiles: {e}"
+        ) from e
+
+    # 4. Construct registry (detects duplicates)
+    try:
+        exporter_registry = TelemetryExporterRegistry(
+            profiles=(log_profile, json_profile)
+        )
+    except Exception as e:
+        raise TelemetryConfigurationError(
+            f"Failed to construct exporter registry: {e}"
+        ) from e
+
+    # 5. Construct engine definition
+    active_profile_ids = tuple(t_settings.active_exporters)
+    for profile_id in active_profile_ids:
+        try:
+            exporter_registry.resolve(profile_id)
+        except Exception as e:
+            raise TelemetryConfigurationError(
+                f"Active telemetry exporter '{profile_id}' not found in registry."
+            ) from e
+
+    telemetry_def = PipelineTelemetryDefinition(
+        enabled=t_settings.enabled,
+        snapshot_on_every_execution=t_settings.snapshot_on_every_execution,
+        active_exporter_profile_ids=active_profile_ids,
+    )
+
+    collector = InMemoryTelemetryCollector()
+    event_factory = DefaultTelemetryEventFactory()
+
+    return PipelineTelemetryEngine(
+        definition=telemetry_def,
+        collector=collector,
+        exporter_registry=exporter_registry,
+        event_factory=event_factory,
+    )

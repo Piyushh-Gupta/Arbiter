@@ -3,7 +3,7 @@
 import hashlib
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from src.core.decision.engine import DecisionEngine
 from src.core.evaluation.evaluation_models import EvaluationResult
@@ -351,6 +351,7 @@ class ArbiterPipeline:
         explanation_registry: Any = None,
         evaluation_registry: Any = None,
         modern_pipeline: ModernArbiterPipeline | None = None,
+        telemetry_hook: Callable[[PipelineExecutionResult], None] | None = None,
     ) -> None:
         self._retrieval_registry = retrieval_registry
         self._verification_registry = verification_registry
@@ -360,10 +361,14 @@ class ArbiterPipeline:
         self._explanation_registry = explanation_registry
         self._evaluation_registry = evaluation_registry
         self.modern_pipeline = modern_pipeline
+        self._telemetry_hook = telemetry_hook
 
     def execute(self, request: PipelineExecutionRequest) -> EvaluationResult:
         if self.modern_pipeline is None:
             raise PipelineConfigurationError(
                 "Modern pipeline adapter missing modern_pipeline instance."
             )
-        return self.modern_pipeline.execute(request).evaluation_result
+        result = self.modern_pipeline.execute(request)
+        if self._telemetry_hook is not None:
+            self._telemetry_hook(result)
+        return result.evaluation_result
