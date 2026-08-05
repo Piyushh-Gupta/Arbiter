@@ -19,7 +19,7 @@ def test_correlation_metadata() -> None:
     assert model.client_id is None
 
     with pytest.raises(ValidationError):
-        CorrelationMetadata(correlation_id="test-id", extra="field")  # type: ignore 
+        CorrelationMetadata(correlation_id="test-id", extra="field")  # type: ignore
 
 
 def test_api_response_envelope() -> None:
@@ -53,4 +53,4 @@ def test_response_models_immutability() -> None:
     """Verifies response models are immutable."""
     model = ReadinessResponse(status="ready")
     with pytest.raises(ValidationError):
-        model.status = "not_ready" 
+        model.status = "not_ready"

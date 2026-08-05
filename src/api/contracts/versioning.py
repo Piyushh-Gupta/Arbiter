@@ -51,7 +51,7 @@ class ApiContractRegistry:
                     f"Duplicate API contract profile ID: {profile.profile_id}"
                 )
             # Safe because dict assignment is synchronous and isolated to init
-            self._profiles[profile.profile_id] = profile 
+            self._profiles[profile.profile_id] = profile
 
     def resolve(self, profile_id: str) -> ApiContractProfile:
         """Resolves an API contract profile by ID."""

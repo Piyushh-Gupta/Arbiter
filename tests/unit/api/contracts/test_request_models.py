@@ -33,11 +33,11 @@ def test_evaluate_claim_request_validation() -> None:
 
     with pytest.raises(ValidationError):
         # Extra fields forbidden
-        EvaluateClaimRequest(claim="Test", extra="field")  # type: ignore 
+        EvaluateClaimRequest(claim="Test", extra="field")  # type: ignore
 
 
 def test_request_models_immutability() -> None:
     """Verifies request models are immutable."""
     model = EvaluateClaimRequest(claim="Test")
     with pytest.raises(ValidationError):
-        model.claim = "Modified" 
+        model.claim = "Modified"

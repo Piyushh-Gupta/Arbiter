@@ -33,7 +33,7 @@ def test_error_envelope() -> None:
     assert envelope.correlation_id == "corr-123"
     assert envelope.details is not None
     assert len(envelope.details) == 1
-    assert envelope.details[0].loc == ("body", "claim")  # type: ignore 
+    assert envelope.details[0].loc == ("body", "claim")  # type: ignore
 
 
 def test_error_envelope_immutability() -> None:
@@ -43,4 +43,4 @@ def test_error_envelope_immutability() -> None:
         message="Test message",
     )
     with pytest.raises(ValidationError):
-        envelope.error_code = "MODIFIED" 
+        envelope.error_code = "MODIFIED"
