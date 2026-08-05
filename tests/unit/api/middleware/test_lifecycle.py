@@ -4,9 +4,7 @@ import pytest
 
 from src.api.middleware.base import BaseMiddlewareComponent, Clock
 from src.api.middleware.lifecycle import LifecycleManager
-from src.api.middleware.middleware_models import (
-    RequestLifecyclePhase,
-)
+from src.api.middleware.middleware_models import RequestLifecyclePhase
 from src.api.middleware.pipeline import MiddlewarePipeline
 from src.core.exceptions import InvalidLifecycleTransitionError
 
@@ -20,9 +18,7 @@ class MockClock(Clock):
 
 
 def test_lifecycle_manager_initializes_and_finalizes_request() -> None:
-    from src.api.middleware.base import (
-        MiddlewareExecutionContext,
-    )
+    from src.api.middleware.middleware_models import MiddlewareExecutionContext
 
     class Dummy(BaseMiddlewareComponent):
         def execute(
@@ -46,9 +42,7 @@ def test_lifecycle_manager_initializes_and_finalizes_request() -> None:
 
 
 def test_lifecycle_manager_cannot_finalize_twice() -> None:
-    from src.api.middleware.base import (
-        MiddlewareExecutionContext,
-    )
+    from src.api.middleware.middleware_models import MiddlewareExecutionContext
 
     class Dummy(BaseMiddlewareComponent):
         def execute(
