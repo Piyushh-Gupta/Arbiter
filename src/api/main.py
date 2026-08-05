@@ -3,10 +3,11 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.api.routes import evaluation, health
+from src.api.services.exceptions import ExceptionTranslator
 from src.core.bootstrap import (
     build_calibration_registry,
     build_pipeline,
@@ -14,6 +15,7 @@ from src.core.bootstrap import (
     build_pipeline_explanation_registry,
     build_resilience_controller,
     build_resilience_registry,
+    build_services,
     build_telemetry_engine,
     build_verification_operational_registry,
     build_verification_optimization_registry,
@@ -48,6 +50,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             resilience_profile=resilience_profile,
         )
         app.state.pipeline = pipeline
+        if hasattr(pipeline, "operations") and pipeline.operations is not None:
+            pipeline.operations.startup()
+
+        app.state.service_registry = build_services(config, pipeline)
         app.state.telemetry_engine = telemetry_engine
         app.state.resilience_executor = resilience_executor
         app.state.resilience_registry = resilience_registry
@@ -91,6 +97,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         and app.state.resilience_executor is not None
     ):
         app.state.resilience_executor.shutdown(wait=True)
+    app.state.service_registry = None
     app.state.pipeline = None
     app.state.telemetry_engine = None
     app.state.resilience_executor = None
@@ -124,9 +131,10 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         """Global exception handler mapping domain exceptions to HTTP responses."""
         # By default, ArbiterErrors are configuration or client issues for the API (e.g. ProfileNotFound)
+        translated = ExceptionTranslator.translate(exc)
         return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={"detail": str(exc)},
+            status_code=translated.status_code,
+            content={"detail": translated.detail},
         )
 
     @app.exception_handler(Exception)
@@ -137,9 +145,10 @@ def create_app() -> FastAPI:
         logger.error(
             f"Unhandled exception during request processing: {exc}", exc_info=True
         )
+        translated = ExceptionTranslator.translate(exc)
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal Server Error"},
+            status_code=translated.status_code,
+            content={"detail": translated.detail},
         )
 
     return app

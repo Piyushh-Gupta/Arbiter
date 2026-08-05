@@ -1,4 +1,5 @@
-"""Health check endpoints."""
+with open("src/api/routes/health.py", "w", encoding="utf-8") as f:
+    f.write('''"""Health check endpoints."""
 
 import uuid
 
@@ -50,13 +51,10 @@ async def liveness_check(request: Request) -> HealthStatusResponse:
 )
 async def readiness_check(request: Request, response: Response) -> HealthStatusResponse:
     """Returns application readiness status through the Service Layer."""
-    if (
-        not hasattr(request.app.state, "service_registry")
-        or request.app.state.service_registry is None
-    ):
+    if not hasattr(request.app.state, "service_registry") or request.app.state.service_registry is None:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthStatusResponse(status="not_ready", correlation_id="")
-
+        
     registry: ServiceRegistry = request.app.state.service_registry
     res = registry.health_service.check_readiness(_build_context(request))
     if res.status != "ready":
@@ -86,15 +84,13 @@ async def verification_readiness_check(
     request: Request, response: Response
 ) -> HealthStatusResponse:
     """Returns verification subsystem readiness status."""
-    if (
-        not hasattr(request.app.state, "service_registry")
-        or request.app.state.service_registry is None
-    ):
+    if not hasattr(request.app.state, "service_registry") or request.app.state.service_registry is None:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthStatusResponse(status="not_ready", correlation_id="")
-
+        
     registry: ServiceRegistry = request.app.state.service_registry
     res = registry.health_service.check_readiness(_build_context(request))
     if res.status != "ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return res
+''')

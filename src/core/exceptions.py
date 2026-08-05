@@ -609,3 +609,7 @@ class IllegalLifecycleTransitionError(ArbiterError):
 
 class PipelineOperationalExecutionError(ArbiterError):
     """Raised when an operational controller encounters an execution failure."""
+
+
+class APIServiceConfigurationError(ConfigurationError):
+    """Raised when the API service layer is misconfigured."""

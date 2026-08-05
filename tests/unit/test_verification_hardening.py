@@ -87,12 +87,16 @@ def test_health_endpoints_integration() -> None:
         # 1. Test verification liveness
         response_live = client.get("/verification/health/live")
         assert response_live.status_code == status.HTTP_200_OK
-        assert response_live.json() == {"status": "alive"}
+        data = response_live.json()
+        assert data["status"] == "alive"
+        assert "correlation_id" in data
 
         # 2. Test verification readiness (lifespan has mounted the registries)
         response_ready = client.get("/verification/health/ready")
         assert response_ready.status_code == status.HTTP_200_OK
-        assert response_ready.json() == {"status": "ready"}
+        ready_data = response_ready.json()
+        assert ready_data["status"] == "ready"
+        assert "correlation_id" in ready_data
 
 
 def test_health_endpoints_failure_scenarios() -> None:
@@ -106,7 +110,9 @@ def test_health_endpoints_failure_scenarios() -> None:
     # Readiness should return 503 since registries are not mounted
     response_ready = client.get("/verification/health/ready")
     assert response_ready.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-    assert response_ready.json() == {"status": "not_ready"}
+    data = response_ready.json()
+    assert data["status"] == "not_ready"
+    assert "correlation_id" in data
 
 
 def test_exception_sanitization() -> None:

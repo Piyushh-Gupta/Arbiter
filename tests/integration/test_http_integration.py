@@ -13,7 +13,9 @@ def test_liveness_endpoint(app: FastAPI) -> None:
     with TestClient(app) as client:
         response = client.get("/health/live")
         assert response.status_code == 200
-        assert response.json() == {"status": "alive"}
+        data = response.json()
+    assert data["status"] == "alive"
+    assert "correlation_id" in data
 
 
 def test_readiness_endpoint(app: FastAPI) -> None:
@@ -23,13 +25,17 @@ def test_readiness_endpoint(app: FastAPI) -> None:
     app.state.pipeline = None  # Ensure it's not somehow lingering
     response_503 = uninitialized_client.get("/health/ready")
     assert response_503.status_code == 503
-    assert response_503.json() == {"status": "not_ready"}
+    data = response_503.json()
+    assert data["status"] == "not_ready"
+    assert "correlation_id" in data
 
     # With lifespan triggered, it should return 200
     with TestClient(app) as client:
         response_200 = client.get("/health/ready")
         assert response_200.status_code == 200
-        assert response_200.json() == {"status": "ready"}
+        data = response_200.json()
+        assert data["status"] == "ready"
+        assert "correlation_id" in data
 
 
 def test_successful_pipeline_execution(
@@ -53,9 +59,15 @@ def test_successful_pipeline_execution(
         assert isinstance(data["metrics"], list)
         assert len(data["metrics"]) > 0
 
-        # Ensure determinism across identical HTTP requests
+        # Ensure determinism across identical HTTP requests (ignoring timing and correlation IDs)
         response_two = client.post("/v1/evaluate", json=valid_http_request_payload)
-        assert response.json() == response_two.json()
+
+        data_one = response.json()
+        data_two = response_two.json()
+
+        assert data_one["metrics"] == data_two["metrics"]
+        assert "execution_metadata" in data_one
+        assert "execution_metadata" in data_two
 
 
 def test_invalid_request_validation(app: FastAPI) -> None:

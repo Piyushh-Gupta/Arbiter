@@ -4,6 +4,9 @@ import logging
 import sys
 from typing import Any, Sequence
 
+from src.api.services.factory import ServiceFactory
+from src.api.services.profiles import ServiceProfile
+from src.api.services.registry import ServiceProfileRegistry, ServiceRegistry
 from src.core.cache.cache_models import RetrievalCacheProfileRegistry
 from src.core.config import Settings
 from src.core.decision.decision_models import DecisionProfile, DecisionProfileRegistry
@@ -13,6 +16,7 @@ from src.core.evaluation.evaluation_models import (
     RuleBasedEvaluationDefinition,
 )
 from src.core.evaluation.implementations import RuleBasedEvaluator
+from src.core.exceptions import APIServiceConfigurationError
 from src.core.explainability.explainability_models import (
     ExplanationProfile,
     ExplanationProfileRegistry,
@@ -1725,7 +1729,7 @@ def build_pipeline(
 
     modern_pipeline = pipeline_registry.resolve("default_pipeline").orchestrator
 
-    return ArbiterPipeline(
+    pipeline = ArbiterPipeline(
         retrieval_registry=retrieval_registry,
         verification_registry=verification_registry,
         failure_analysis_registry=failure_analysis_registry,
@@ -1738,6 +1742,39 @@ def build_pipeline(
         resilience_controller=resilience_controller,
         resilience_profile=resilience_profile,
     )
+
+    if getattr(config, "pipeline_operations", None) and getattr(
+        config.pipeline_operations, "enabled", False
+    ):
+        from typing import Any
+
+        from src.core.pipeline.operations.controller import PipelineOperationsController
+        from src.core.pipeline.operations.health import PipelineHealthChecker
+        from src.core.pipeline.operations.lifecycle import PipelineLifecycleManager
+        from src.core.pipeline.operations.operation_models import (
+            PipelineOperationalMetadata,
+        )
+        from src.core.pipeline.operations.readiness import PipelineReadinessEvaluator
+        from src.core.pipeline.operations.snapshot import OperationalSnapshotBuilder
+
+        ops_metadata = PipelineOperationalMetadata(
+            environment=getattr(config, "environment", "development"),
+            version=getattr(config, "version", "1.0.0"),
+        )
+
+        def _get_records() -> list[Any]:
+            return []
+
+        pipeline.operations = PipelineOperationsController(  # type: ignore
+            lifecycle_manager=PipelineLifecycleManager(),
+            health_checker=PipelineHealthChecker(),
+            readiness_evaluator=PipelineReadinessEvaluator(),
+            snapshot_builder=OperationalSnapshotBuilder(),
+            metadata=ops_metadata,
+            subsystem_record_provider=_get_records,
+        )
+
+    return pipeline
 
 
 def build_verification_optimization_registry(
@@ -2145,3 +2182,24 @@ def build_pipeline_explanation_registry(config: Any) -> Any:
         ) from e
 
     return registry
+
+
+def build_services(config: AppConfig, pipeline: Any) -> ServiceRegistry:
+    """Builds and validates the API Service Layer."""
+    settings = config.api_services
+
+    try:
+        profile = ServiceProfile(
+            profile_id=settings.active_profile_id,
+            require_correlation_id=settings.require_correlation_id,
+            timeout_seconds=settings.timeout_seconds,
+        )
+        ServiceProfileRegistry(profiles=(profile,))
+    except Exception as e:
+        raise APIServiceConfigurationError(
+            f"Service registry validation failed: {e}"
+        ) from e
+
+    # Construct the services exclusively through the ServiceFactory
+    service_registry = ServiceFactory.build_registry(pipeline)
+    return service_registry

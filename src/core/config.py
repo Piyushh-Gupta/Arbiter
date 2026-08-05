@@ -36,6 +36,14 @@ class DownloadSettings(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0.0)
 
 
+class APIServiceSettings(BaseModel):
+    """Settings for the API Service Layer."""
+
+    active_profile_id: str = Field(default="default_api_service")
+    require_correlation_id: bool = Field(default=True)
+    timeout_seconds: float = Field(default=30.0)
+
+
 class Settings(BaseSettings):
     """Root application settings."""
 
@@ -80,6 +88,9 @@ class Settings(BaseSettings):
     )
     pipeline_operations: "PipelineOperationsSettings" = Field(
         default_factory=lambda: PipelineOperationsSettings()
+    )
+    api_services: "APIServiceSettings" = Field(
+        default_factory=lambda: APIServiceSettings()
     )
 
     # Expose paths through config for unified access

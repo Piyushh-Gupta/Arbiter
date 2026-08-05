@@ -25,6 +25,26 @@ class MockEvaluationResult:
 class MockPipeline:
     def __init__(self, should_fail: bool = False) -> None:
         self.should_fail = should_fail
+        import datetime
+        from unittest.mock import MagicMock
+
+        from src.core.pipeline.operations.operation_models import (
+            PipelineHealthStatus,
+            PipelineLifecycleState,
+            PipelineOperationalMetadata,
+            PipelineOperationalSnapshot,
+            PipelineReadinessStatus,
+        )
+
+        self.operations = MagicMock()
+        self.operations.get_snapshot.return_value = PipelineOperationalSnapshot(
+            timestamp=datetime.datetime.now(datetime.timezone.utc),
+            lifecycle_state=PipelineLifecycleState.RUNNING,
+            overall_health=PipelineHealthStatus.HEALTHY,
+            overall_readiness=PipelineReadinessStatus.READY,
+            subsystem_records=(),
+            metadata=PipelineOperationalMetadata(environment="test", version="1.0.0"),
+        )
         self.last_request: PipelineExecutionRequest | None = None
 
     def execute(self, request: PipelineExecutionRequest) -> MockEvaluationResult:
@@ -36,20 +56,28 @@ class MockPipeline:
 
 @pytest.fixture
 def client() -> TestClient:
-    app.state.pipeline = MockPipeline()
+    pipeline = MockPipeline()
+    from src.api.services.factory import ServiceFactory
+
+    app.state.pipeline = pipeline
+    app.state.service_registry = ServiceFactory.build_registry(pipeline)  # type: ignore
     return TestClient(app)
 
 
 def test_health_check_live(client: TestClient) -> None:
     response = client.get("/health/live")
     assert response.status_code == 200
-    assert response.json() == {"status": "alive"}
+    data = response.json()
+    assert data["status"] == "alive"
+    assert "correlation_id" in data
 
 
 def test_health_check_ready(client: TestClient) -> None:
     response = client.get("/health/ready")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    data = response.json()
+    assert data["status"] == "ready"
+    assert "correlation_id" in data
 
 
 def test_successful_evaluation(client: TestClient) -> None:
@@ -78,7 +106,11 @@ def test_validation_failure(client: TestClient) -> None:
 
 
 def test_domain_exception_translation(client: TestClient) -> None:
-    app.state.pipeline = MockPipeline(should_fail=True)
+    pipeline = MockPipeline(should_fail=True)
+    from src.api.services.factory import ServiceFactory
+
+    app.state.pipeline = pipeline
+    app.state.service_registry = ServiceFactory.build_registry(pipeline)  # type: ignore
     payload = {
         "claim": "Test claim",
         "pipeline_profile_id": "1",
