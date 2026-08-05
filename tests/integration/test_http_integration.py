@@ -103,8 +103,9 @@ def test_exception_translation(
         assert response.status_code == 400
 
         data = response.json()
-        assert "detail" in data
-        assert "non_existent_profile" in data["detail"]
+        assert "error_code" in data
+        assert data["error_code"] == "domain_error"
+        assert "non_existent_profile" in data["message"]
 
 
 def test_unexpected_exception_translation(app: FastAPI) -> None:
@@ -121,7 +122,8 @@ def test_unexpected_exception_translation(app: FastAPI) -> None:
         response = client.get("/trigger_500")
         assert response.status_code == 500
         data = response.json()
-        assert data == {"detail": "Internal Server Error"}
+        assert data["error_code"] == "internal_error"
+        assert data["message"] == "An unexpected error occurred."
         assert "Secret" not in str(response.content)
 
 

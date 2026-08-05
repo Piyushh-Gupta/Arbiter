@@ -119,4 +119,7 @@ def test_domain_exception_translation(client: TestClient) -> None:
 
     # Global exception handler maps ArbiterError to 400
     assert response.status_code == 400
-    assert response.json() == {"detail": "Simulated domain error"}
+    data = response.json()
+    assert data["error_code"] == "domain_error"
+    assert data["message"] == "Simulated domain error"
+    assert "correlation_id" in data

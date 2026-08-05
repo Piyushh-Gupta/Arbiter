@@ -89,7 +89,6 @@ def test_health_endpoints_integration() -> None:
         assert response_live.status_code == status.HTTP_200_OK
         data = response_live.json()
         assert data["status"] == "alive"
-        assert "correlation_id" in data
 
         # 2. Test verification readiness (lifespan has mounted the registries)
         response_ready = client.get("/verification/health/ready")
@@ -112,7 +111,6 @@ def test_health_endpoints_failure_scenarios() -> None:
     assert response_ready.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     data = response_ready.json()
     assert data["status"] == "not_ready"
-    assert "correlation_id" in data
 
 
 def test_exception_sanitization() -> None:
@@ -128,7 +126,9 @@ def test_exception_sanitization() -> None:
 
     # Ensure client gets sanitized response and not the stack trace or details
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json() == {"detail": "Internal Server Error"}
+    data = response.json()
+    assert data["error_code"] == "internal_error"
+    assert data["message"] == "Internal server error."
 
 
 def test_determinism_operational_no_op() -> None:

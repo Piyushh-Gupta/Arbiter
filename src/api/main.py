@@ -7,11 +7,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.api.routes import evaluation, health
-from src.api.services.exceptions import ExceptionTranslator
 from src.core.bootstrap import (
     build_calibration_registry,
     build_contract_engine,
     build_contract_registry,
+    build_global_exception_handler,
+    build_lifecycle_manager,
+    build_middleware_pipeline,
+    build_middleware_registry,
     build_pipeline,
     build_pipeline_benchmark_registry,
     build_pipeline_explanation_registry,
@@ -59,6 +62,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         contract_registry = build_contract_registry(config)
         app.state.contract_engine = build_contract_engine(config, contract_registry)
+
+        # Build middleware & lifecycle manager
+        app.state.middleware_registry = build_middleware_registry(config)
+        middleware_pipeline = build_middleware_pipeline()
+        app.state.lifecycle_manager = build_lifecycle_manager(
+            config, middleware_pipeline
+        )
+
+        # Build global exception handler
+        app.state.global_exception_handler = build_global_exception_handler()
 
         app.state.telemetry_engine = telemetry_engine
         app.state.resilience_executor = resilience_executor
@@ -136,26 +149,31 @@ def create_app() -> FastAPI:
     async def arbiter_error_handler(
         request: Request, exc: ArbiterError
     ) -> JSONResponse:
-        """Global exception handler mapping domain exceptions to HTTP responses."""
-        # By default, ArbiterErrors are configuration or client issues for the API (e.g. ProfileNotFound)
-        translated = ExceptionTranslator.translate(exc)
+        handler = getattr(request.app.state, "global_exception_handler", None)
+        if handler:
+            resp = await handler.handle_exception(request, exc)
+            assert isinstance(resp, JSONResponse)
+            return resp
         return JSONResponse(
-            status_code=translated.status_code,
-            content={"detail": translated.detail},
+            status_code=400, content={"error_code": "domain_error", "message": str(exc)}
         )
 
     @app.exception_handler(Exception)
     async def global_exception_handler(
         request: Request, exc: Exception
     ) -> JSONResponse:
-        """Global exception handler masking internal errors from external consumers."""
-        logger.error(
-            f"Unhandled exception during request processing: {exc}", exc_info=True
-        )
-        translated = ExceptionTranslator.translate(exc)
+        handler = getattr(request.app.state, "global_exception_handler", None)
+        if handler:
+            resp = await handler.handle_exception(request, exc)
+            assert isinstance(resp, JSONResponse)
+            return resp
+        logger.error(f"Fallback exception handler caught: {exc}", exc_info=True)
         return JSONResponse(
-            status_code=translated.status_code,
-            content={"detail": translated.detail},
+            status_code=500,
+            content={
+                "error_code": "internal_error",
+                "message": "Internal server error.",
+            },
         )
 
     return app

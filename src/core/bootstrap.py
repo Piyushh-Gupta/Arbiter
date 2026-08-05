@@ -2244,3 +2244,65 @@ def build_contract_engine(
         "default_api_contract",
     )
     return ApiContractEngine(registry=registry, active_profile_id=active_profile_id)
+
+
+def build_middleware_registry(config: Any) -> Any:
+    """Builds the middleware profile registry."""
+    from src.api.middleware.middleware_models import MiddlewareProfile
+    from src.api.middleware.registry import MiddlewareProfileRegistry
+
+    settings = config.api_middleware
+    profile = MiddlewareProfile(
+        profile_id=settings.active_profile_id,
+        require_correlation_propagation=settings.require_correlation_propagation,
+    )
+    return MiddlewareProfileRegistry(profiles=(profile,))
+
+
+def build_middleware_pipeline() -> Any:
+    """Builds the middleware pipeline."""
+    import time
+
+    from src.api.middleware.base import Clock
+    from src.api.middleware.correlation import CorrelationComponent
+    from src.api.middleware.pipeline import MiddlewarePipeline
+    from src.api.middleware.timing import TimingComponent
+
+    class SystemClock(Clock):
+        def now_ns(self) -> int:
+            return time.time_ns()
+
+    return MiddlewarePipeline(
+        components=(
+            CorrelationComponent(),
+            TimingComponent(clock=SystemClock()),
+        )
+    )
+
+
+def build_lifecycle_manager(config: Any, pipeline: Any) -> Any:
+    """Builds the lifecycle manager."""
+    import time
+
+    from src.api.middleware.base import Clock
+    from src.api.middleware.lifecycle import LifecycleManager
+
+    class SystemClock(Clock):
+        def now_ns(self) -> int:
+            return time.time_ns()
+
+    return LifecycleManager(
+        pipeline=pipeline,
+        clock=SystemClock(),
+        active_profile_id=config.api_middleware.active_profile_id,
+    )
+
+
+def build_global_exception_handler() -> Any:
+    """Builds the global exception handler."""
+    from src.api.middleware.exception_handler import (
+        ExceptionTranslator,
+        GlobalExceptionHandler,
+    )
+
+    return GlobalExceptionHandler(translator=ExceptionTranslator())

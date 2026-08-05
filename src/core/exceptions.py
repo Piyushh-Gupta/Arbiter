@@ -629,3 +629,23 @@ class DuplicateApiContractProfileError(ArbiterError):
 
 class ApiContractProfileNotFoundError(ArbiterError):
     """Raised when an ApiContractProfile cannot be resolved from the registry."""
+
+
+class MiddlewareConfigurationError(ConfigurationError):
+    """Raised when the middleware subsystem is misconfigured."""
+
+
+class MiddlewareExecutionError(ArbiterError):
+    """Raised when a middleware component encounters a runtime failure."""
+
+
+class DuplicateMiddlewareProfileError(ArbiterError):
+    """Raised when a DuplicateMiddlewareProfileError detects a duplicate profile_id."""
+
+
+class MiddlewareProfileNotFoundError(ArbiterError):
+    """Raised when a MiddlewareProfile cannot be resolved from the registry."""
+
+
+class InvalidLifecycleTransitionError(ArbiterError):
+    """Raised when an invalid request lifecycle phase transition is attempted."""

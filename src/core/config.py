@@ -52,6 +52,13 @@ class ApiContractSettings(BaseModel):
     strict_validation: bool = Field(default=True)
 
 
+class MiddlewareSettings(BaseModel):
+    """Settings for the API Middleware Layer."""
+
+    active_profile_id: str = Field(default="default_middleware")
+    require_correlation_propagation: bool = Field(default=True)
+
+
 class Settings(BaseSettings):
     """Root application settings."""
 
@@ -96,6 +103,9 @@ class Settings(BaseSettings):
     )
     pipeline_operations: "PipelineOperationsSettings" = Field(
         default_factory=lambda: PipelineOperationsSettings()
+    )
+    api_middleware: "MiddlewareSettings" = Field(
+        default_factory=lambda: MiddlewareSettings()
     )
     api_contracts: "ApiContractSettings" = Field(
         default_factory=lambda: ApiContractSettings()
