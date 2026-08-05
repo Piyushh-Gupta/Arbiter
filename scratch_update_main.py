@@ -1,15 +1,18 @@
 with open("src/api/main.py", "r", encoding="utf-8") as f:
     code = f.read()
 
-import_stmt = "from src.core.bootstrap import build_services\nfrom src.api.services.exceptions import ExceptionTranslator\n"
+import_statement = "from src.core.bootstrap import (\n    build_pipeline,\n    build_resilience_controller,\n    build_resilience_registry,\n    build_telemetry_engine,\n    initialize_application,\n    build_services,\n    build_contract_registry,\n    build_contract_engine\n)"
+import_old = "from src.core.bootstrap import (\n    build_pipeline,\n    build_resilience_controller,\n    build_resilience_registry,\n    build_telemetry_engine,\n    initialize_application,\n    build_services,\n)"
+code = code.replace(import_old, import_statement)
 
-if "build_services" not in code:
-    code = code.replace("from src.core.bootstrap import (", import_stmt + "from src.core.bootstrap import (")
-    code = code.replace("app.state.pipeline = pipeline", "app.state.pipeline = pipeline\n        app.state.service_registry = build_services(config, pipeline)")
-    code = code.replace("app.state.pipeline = None", "app.state.service_registry = None\n    app.state.pipeline = None")
+lifespan_code = '''
+        app.state.service_registry = build_services(config, pipeline)
+        
+        contract_registry = build_contract_registry(config)
+        app.state.contract_engine = build_contract_engine(config, contract_registry)
+'''
+code = code.replace("        app.state.service_registry = build_services(config, pipeline)", lifespan_code)
+code = code.replace("    app.state.service_registry = None", "    app.state.contract_engine = None\n    app.state.service_registry = None")
 
-    code = code.replace("return JSONResponse(\n            status_code=status.HTTP_400_BAD_REQUEST,\n            content={\"detail\": str(exc)},\n        )", "raise ExceptionTranslator.translate(exc)")
-    code = code.replace("return JSONResponse(\n            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,\n            content={\"detail\": \"Internal Server Error\"},\n        )", "raise ExceptionTranslator.translate(exc)")
-
-    with open("src/api/main.py", "w", encoding="utf-8") as f:
-        f.write(code)
+with open("src/api/main.py", "w", encoding="utf-8") as f:
+    f.write(code)

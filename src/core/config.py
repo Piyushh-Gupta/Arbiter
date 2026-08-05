@@ -44,6 +44,14 @@ class APIServiceSettings(BaseModel):
     timeout_seconds: float = Field(default=30.0)
 
 
+class ApiContractSettings(BaseModel):
+    """Settings for the API Contract Layer."""
+
+    active_profile_id: str = Field(default="default_api_contract")
+    require_correlation_id: bool = Field(default=True)
+    strict_validation: bool = Field(default=True)
+
+
 class Settings(BaseSettings):
     """Root application settings."""
 
@@ -88,6 +96,9 @@ class Settings(BaseSettings):
     )
     pipeline_operations: "PipelineOperationsSettings" = Field(
         default_factory=lambda: PipelineOperationsSettings()
+    )
+    api_contracts: "ApiContractSettings" = Field(
+        default_factory=lambda: ApiContractSettings()
     )
     api_services: "APIServiceSettings" = Field(
         default_factory=lambda: APIServiceSettings()

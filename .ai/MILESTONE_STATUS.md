@@ -146,3 +146,7 @@
 
 
 
+
+## M6 API Modernization
+- [x] M6.1 API & Service Layer Architecture Modernization
+- [x] M6.2 API Contracts, Request Validation & Response Models

@@ -4,6 +4,13 @@ import logging
 import sys
 from typing import Any, Sequence
 
+from src.api.contracts.engine import ApiContractEngine
+from src.api.contracts.versioning import (
+    ApiContractDefinition,
+    ApiContractProfile,
+    ApiContractRegistry,
+    ApiVersionId,
+)
 from src.api.services.factory import ServiceFactory
 from src.api.services.profiles import ServiceProfile
 from src.api.services.registry import ServiceProfileRegistry, ServiceRegistry
@@ -2203,3 +2210,37 @@ def build_services(config: AppConfig, pipeline: Any) -> ServiceRegistry:
     # Construct the services exclusively through the ServiceFactory
     service_registry = ServiceFactory.build_registry(pipeline)
     return service_registry
+
+
+def build_contract_registry(config: Any) -> ApiContractRegistry:
+    """Builds the API Contract registry."""
+    definition = ApiContractDefinition(
+        supported_versions=(ApiVersionId.V1, ApiVersionId.V2),
+        require_correlation_id=getattr(
+            getattr(config, "api_contracts", None), "require_correlation_id", True
+        ),
+        strict_validation=getattr(
+            getattr(config, "api_contracts", None), "strict_validation", True
+        ),
+    )
+    profile = ApiContractProfile(
+        profile_id=getattr(
+            getattr(config, "api_contracts", None),
+            "active_profile_id",
+            "default_api_contract",
+        ),
+        definition=definition,
+    )
+    return ApiContractRegistry(profiles=[profile])
+
+
+def build_contract_engine(
+    config: Any, registry: ApiContractRegistry
+) -> ApiContractEngine:
+    """Builds the API Contract Engine."""
+    active_profile_id = getattr(
+        getattr(config, "api_contracts", None),
+        "active_profile_id",
+        "default_api_contract",
+    )
+    return ApiContractEngine(registry=registry, active_profile_id=active_profile_id)

@@ -10,6 +10,8 @@ from src.api.routes import evaluation, health
 from src.api.services.exceptions import ExceptionTranslator
 from src.core.bootstrap import (
     build_calibration_registry,
+    build_contract_engine,
+    build_contract_registry,
     build_pipeline,
     build_pipeline_benchmark_registry,
     build_pipeline_explanation_registry,
@@ -54,6 +56,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pipeline.operations.startup()
 
         app.state.service_registry = build_services(config, pipeline)
+
+        contract_registry = build_contract_registry(config)
+        app.state.contract_engine = build_contract_engine(config, contract_registry)
+
         app.state.telemetry_engine = telemetry_engine
         app.state.resilience_executor = resilience_executor
         app.state.resilience_registry = resilience_registry
@@ -97,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         and app.state.resilience_executor is not None
     ):
         app.state.resilience_executor.shutdown(wait=True)
+    app.state.contract_engine = None
     app.state.service_registry = None
     app.state.pipeline = None
     app.state.telemetry_engine = None

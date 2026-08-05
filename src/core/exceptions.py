@@ -613,3 +613,19 @@ class PipelineOperationalExecutionError(ArbiterError):
 
 class APIServiceConfigurationError(ConfigurationError):
     """Raised when the API service layer is misconfigured."""
+
+
+class ApiContractConfigurationError(ConfigurationError):
+    """Raised when the API contract subsystem is misconfigured."""
+
+
+class ApiContractValidationError(ArbiterError):
+    """Raised when an API request or response fails structural validation."""
+
+
+class DuplicateApiContractProfileError(ArbiterError):
+    """Raised when a DuplicateApiContractProfileError detects a duplicate profile_id."""
+
+
+class ApiContractProfileNotFoundError(ArbiterError):
+    """Raised when an ApiContractProfile cannot be resolved from the registry."""
