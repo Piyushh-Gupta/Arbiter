@@ -52,9 +52,7 @@ def test_pipeline_operational_profile_validation() -> None:
     with pytest.raises(ValidationError):
         PipelineOperationalProfile(
             profile_id="invalid",
-            definition=PipelineOperationalDefinition(
-                health_check_timeout_seconds=-1.0
-            ),
+            definition=PipelineOperationalDefinition(health_check_timeout_seconds=-1.0),
         )
 
 
