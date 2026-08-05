@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     pipeline_explanation: "PipelineExplanationSettings" = Field(
         default_factory=lambda: PipelineExplanationSettings()
     )
+    pipeline_operations: "PipelineOperationsSettings" = Field(
+        default_factory=lambda: PipelineOperationsSettings()
+    )
 
     # Expose paths through config for unified access
     paths: type[ProjectPaths] = ProjectPaths
@@ -210,6 +213,13 @@ class PipelineExplanationSettings(BaseModel):
     include_resilience_trace: bool = Field(default=True)
     include_telemetry_summary: bool = Field(default=True)
     include_configuration_fingerprint: bool = Field(default=True)
+
+
+class PipelineOperationsSettings(BaseModel):
+    """Configuration settings for pipeline operations."""
+
+    enabled: bool = Field(default=True)
+    active_profile_id: str = Field(default="default_pipeline_operations")
 
 
 # Modify Settings class to include pipeline subsystems

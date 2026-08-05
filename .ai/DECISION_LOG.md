@@ -161,3 +161,9 @@
 
 
 
+
+## [2026-08-05] M5.6 Pipeline Production Optimization & Hardening
+
+**Decision**: Implement a pure orchestration layer for pipeline operational concerns, separating lifecycle state, health checking, readiness evaluation, and operational snapshots into dedicated, stateless components.
+**Rationale**: Adhering to Arbiter's strict architectural invariants, the `PipelineOperationsController` must only orchestrate without executing business logic. Lifecycle states are modeled strictly using a deterministic state machine via `PipelineLifecycleState` Enum, and all operational models (`SubsystemHealthRecord`, `PipelineOperationalSnapshot`) remain immutable to guarantee thread-safe observability.
+**Impact**: This completes the operational hardening of Arbiter, providing enterprise-grade lifecycle management, health monitoring, and readiness checks while strictly preserving the immutable, stateless, and registry-driven pipeline architecture.

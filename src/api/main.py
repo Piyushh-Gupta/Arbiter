@@ -77,6 +77,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Graceful Shutdown
     logger.info("Initiating graceful shutdown...")
+    if hasattr(app.state, "pipeline") and app.state.pipeline is not None:
+        if (
+            hasattr(app.state.pipeline, "_operations_controller")
+            and app.state.pipeline._operations_controller is not None
+        ):
+            try:
+                app.state.pipeline._operations_controller.shutdown()
+            except Exception as e:
+                logger.error(f"Error during pipeline operational shutdown: {e}")
     if (
         hasattr(app.state, "resilience_executor")
         and app.state.resilience_executor is not None

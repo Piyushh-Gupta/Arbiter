@@ -589,3 +589,23 @@ class DuplicatePipelineExplanationProfileError(ArbiterError):
 
 class PipelineExplanationProfileNotFoundError(ArbiterError):
     """Raised when a PipelineExplanationProfile cannot be resolved from the registry."""
+
+
+class PipelineOperationalConfigurationError(PipelineConfigurationError):
+    """Raised when a PipelineOperationalProfile contains invalid configuration."""
+
+
+class DuplicateOperationalProfileError(ArbiterError):
+    """Raised when a PipelineOperationalProfileRegistry detects a duplicate profile_id."""
+
+
+class OperationalProfileNotFoundError(ArbiterError):
+    """Raised when a PipelineOperationalProfile cannot be resolved from the registry."""
+
+
+class IllegalLifecycleTransitionError(ArbiterError):
+    """Raised when an illegal transition is attempted in the PipelineLifecycleManager."""
+
+
+class PipelineOperationalExecutionError(ArbiterError):
+    """Raised when an operational controller encounters an execution failure."""
