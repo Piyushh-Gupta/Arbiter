@@ -2306,3 +2306,51 @@ def build_global_exception_handler() -> Any:
     )
 
     return GlobalExceptionHandler(translator=ExceptionTranslator())
+
+
+def build_monitoring_registry(config: Any) -> Any:
+    """Builds the monitoring profile registry."""
+    from src.api.observability.registry import MonitoringProfileRegistry
+    from src.api.observability.telemetry_models import MonitoringProfile
+
+    settings = config.monitoring
+    registry = MonitoringProfileRegistry()
+    profile = MonitoringProfile(
+        profile_id=settings.active_profile_id,
+        snapshot_interval_seconds=settings.snapshot_interval_seconds,
+    )
+    registry.register(profile)
+    registry.freeze()
+    return registry
+
+
+def build_monitoring_service(
+    config: Any,
+    registry: Any = None,
+    time_provider: Any = None,
+) -> Any:
+    """Builds the monitoring service and observability pipeline."""
+    from src.api.observability.base import SystemTimeProvider
+    from src.api.observability.collector import TelemetryCollector
+    from src.api.observability.metrics import MetricsAggregator
+    from src.api.observability.monitoring import MonitoringService
+    from src.api.observability.pipeline import ObservabilityPipeline
+    from src.api.observability.snapshots import SnapshotGenerator
+    from src.api.observability.tracing import TracingProvider
+
+    tp = time_provider or SystemTimeProvider()
+    profile_id = config.monitoring.active_profile_id
+
+    collector = TelemetryCollector(time_provider=tp)
+    tracing_provider = TracingProvider(time_provider=tp)
+    metrics_aggregator = MetricsAggregator(time_provider=tp)
+    snapshot_generator = SnapshotGenerator(time_provider=tp)
+
+    pipeline = ObservabilityPipeline(
+        collector=collector,
+        tracing_provider=tracing_provider,
+        metrics_aggregator=metrics_aggregator,
+        snapshot_generator=snapshot_generator,
+        profile_id=profile_id,
+    )
+    return MonitoringService(pipeline=pipeline)

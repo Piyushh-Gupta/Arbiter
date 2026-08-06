@@ -150,3 +150,6 @@
 ## M6 API Modernization
 - [x] M6.1 API & Service Layer Architecture Modernization
 - [x] M6.2 API Contracts, Request Validation & Response Models
+- [x] M6.3 API Exception Handling, Middleware & Request Lifecycle
+- [x] M6.4 API Observability, Telemetry & Monitoring
+

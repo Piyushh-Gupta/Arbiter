@@ -15,6 +15,8 @@ from src.core.bootstrap import (
     build_lifecycle_manager,
     build_middleware_pipeline,
     build_middleware_registry,
+    build_monitoring_registry,
+    build_monitoring_service,
     build_pipeline,
     build_pipeline_benchmark_registry,
     build_pipeline_explanation_registry,
@@ -73,6 +75,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Build global exception handler
         app.state.global_exception_handler = build_global_exception_handler()
 
+        # Build monitoring & observability
+        app.state.monitoring_registry = build_monitoring_registry(config)
+        app.state.monitoring_service = build_monitoring_service(
+            config, app.state.monitoring_registry
+        )
+
         app.state.telemetry_engine = telemetry_engine
         app.state.resilience_executor = resilience_executor
         app.state.resilience_registry = resilience_registry
@@ -91,7 +99,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             config
         )
         logger.info(
-            "Arbiter Pipeline, telemetry engine, resilience engine, benchmark registry, explanation registry, and optimization/operational/calibration registries mounted successfully."
+            "Arbiter Pipeline, telemetry engine, resilience engine, monitoring service, benchmark registry, explanation registry, and optimization/operational/calibration registries mounted successfully."
         )
     except Exception as e:
         # We explicitly log startup failures using the infrastructure logger
@@ -128,8 +136,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.calibration_registry = None
     app.state.pipeline_benchmark_registry = None
     app.state.pipeline_explanation_registry = None
+    app.state.monitoring_registry = None
+    app.state.monitoring_service = None
     logger.info(
-        "Arbiter Pipeline reference, telemetry engine, resilience executor/registry, benchmark registry, explanation registry, and operational/calibration references released."
+        "Arbiter Pipeline reference, telemetry engine, resilience executor/registry, monitoring service, benchmark registry, explanation registry, and operational/calibration references released."
     )
 
 

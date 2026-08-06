@@ -59,6 +59,14 @@ class MiddlewareSettings(BaseModel):
     require_correlation_propagation: bool = Field(default=True)
 
 
+class MonitoringSettings(BaseModel):
+    """Settings for the API Observability and Monitoring Layer."""
+
+    active_profile_id: str = Field(default="default_monitoring")
+    enabled: bool = Field(default=True)
+    snapshot_interval_seconds: float = Field(default=60.0, gt=0.0)
+
+
 class Settings(BaseSettings):
     """Root application settings."""
 
@@ -68,6 +76,7 @@ class Settings(BaseSettings):
     )
 
     # Sub-configurations
+    monitoring: MonitoringSettings = MonitoringSettings()
     dataset: ActiveDatasetSettings = ActiveDatasetSettings()
     download: DownloadSettings = DownloadSettings()
     db: DatabaseSettings = DatabaseSettings()

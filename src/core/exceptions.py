@@ -649,3 +649,23 @@ class MiddlewareProfileNotFoundError(ArbiterError):
 
 class InvalidLifecycleTransitionError(ArbiterError):
     """Raised when an invalid request lifecycle phase transition is attempted."""
+
+
+class ObservabilityError(ArbiterError):
+    """Base exception for observability subsystem errors."""
+
+
+class ObservabilityConfigurationError(ConfigurationError):
+    """Raised when the observability subsystem is misconfigured."""
+
+
+class ObservabilityExecutionError(ArbiterError):
+    """Raised when an observability component encounters a execution failure."""
+
+
+class DuplicateMonitoringProfileError(ArbiterError):
+    """Raised when a duplicate MonitoringProfile is registered."""
+
+
+class MonitoringProfileNotFoundError(ArbiterError):
+    """Raised when a requested MonitoringProfile cannot be resolved from the registry."""
